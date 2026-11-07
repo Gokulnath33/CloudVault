@@ -1,0 +1,1042 @@
+{% extends "base.html" %}
+
+{% block title %}My Vault - CloudVault{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Top User Welcome & Storage Stats Bar -->
+    <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div>
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-brand-500/20">
+                    {{ user['username'][0]|upper }}
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                        Welcome, {{ user['username'] }}!
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                            Approved
+                        </span>
+                    </h1>
+                    <p class="text-xs text-slate-400 mt-0.5">Your private vault is isolated and accessible only by you.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Storage Quota Gauge -->
+        <div class="w-full md:w-80 bg-slate-900/90 p-4 rounded-2xl border border-slate-800">
+            <div class="flex items-center justify-between text-xs mb-1.5">
+                <span class="text-slate-400 flex items-center gap-1.5 font-medium">
+                    <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-brand-400"></i> Storage Used
+                </span>
+                <span class="font-semibold text-white">
+                    {{ stats['used_bytes']|format_bytes }} / {{ stats['storage_quota']|format_bytes }}
+                </span>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                {% set bar_color = 'bg-brand-500' %}
+                {% if quota_percent > 90 %}
+                    {% set bar_color = 'bg-rose-500' %}
+                {% elif quota_percent > 75 %}
+                    {% set bar_color = 'bg-amber-500' %}
+                {% endif %}
+                <div class="h-full rounded-full {{ bar_color }} transition-all duration-500" style="width: {{ quota_percent }}%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-[11px] text-slate-500 mt-1.5">
+                <span>{{ stats['file_count'] }} total files stored</span>
+                <span>{{ quota_percent }}% capacity</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Create Action Toolbar -->
+    <div class="flex flex-wrap items-center justify-between gap-3 p-4 glass-panel rounded-2xl border border-slate-800 shadow-lg">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1.5">
+                <i data-lucide="plus-circle" class="w-4 h-4 text-brand-400"></i> Create:
+            </span>
+            
+            <!-- New Folder Button -->
+            <button type="button" onclick="openModal('newFolderModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition">
+                <i data-lucide="folder-plus" class="w-3.5 h-3.5 text-indigo-400"></i> New Folder
+            </button>
+
+            <!-- New Word Doc Button -->
+            <button type="button" onclick="openModal('newWordModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1.5 transition">
+                <i data-lucide="file-text" class="w-3.5 h-3.5 text-blue-400"></i> Word Doc (.docx)
+            </button>
+
+            <!-- New Excel Sheet Button -->
+            <button type="button" onclick="openModal('newExcelModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 transition">
+                <i data-lucide="sheet" class="w-3.5 h-3.5 text-emerald-400"></i> Excel (.xlsx)
+            </button>
+
+            <!-- New PowerPoint Button -->
+            <button type="button" onclick="openModal('newPptModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/30 flex items-center gap-1.5 transition">
+                <i data-lucide="presentation" class="w-3.5 h-3.5 text-orange-400"></i> PowerPoint (.pptx)
+            </button>
+
+            <!-- New Text Note Button -->
+            <button type="button" onclick="openModal('newTextModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition">
+                <i data-lucide="code" class="w-3.5 h-3.5 text-amber-400"></i> Note / Text (.txt)
+            </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button type="button" onclick="document.getElementById('fileInput').click()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white shadow-md shadow-brand-500/20 flex items-center gap-1.5 transition">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload Files
+            </button>
+        </div>
+    </div>
+
+    <!-- Folders Directory Explorer Section -->
+    {% if folders and folders|length > 0 or current_folder %}
+    <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                <i data-lucide="folder" class="w-4 h-4 text-indigo-400"></i>
+                <a href="{{ url_for('dashboard') }}" class="hover:text-brand-400 transition">My Vault (Root)</a>
+                {% if current_folder %}
+                    <span class="text-slate-600">/</span>
+                    <span class="text-brand-300 font-bold flex items-center gap-1">
+                        <i data-lucide="folder-open" class="w-3.5 h-3.5 text-brand-400"></i> {{ current_folder['name'] }}
+                    </span>
+                {% endif %}
+            </div>
+            {% if current_folder %}
+                <a href="{{ url_for('dashboard') }}" class="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Root Vault
+                </a>
+            {% endif %}
+        </div>
+
+        <!-- Folders Grid -->
+        {% if not current_folder and folders %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-1">
+            {% for fld in folders %}
+            <div class="group relative p-3 rounded-xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 transition flex flex-col justify-between">
+                <a href="{{ url_for('dashboard', folder_id=fld['id']) }}" class="space-y-2 block">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition">
+                        <i data-lucide="folder" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold text-white truncate" title="{{ fld['name'] }}">{{ fld['name'] }}</div>
+                        <div class="text-[10px] text-slate-400 font-mono">{{ fld['file_count'] }} file(s)</div>
+                    </div>
+                </a>
+                <form method="POST" action="{{ url_for('delete_folder_route', folder_id=fld['id']) }}" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition" onsubmit="return confirm('Delete folder {{ fld['name'] }}? Files will remain in your vault.')">
+                    <button type="submit" class="p-1 text-slate-500 hover:text-rose-400">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i>
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Drag & Drop Upload Zone -->
+    <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl">
+        <form id="uploadForm" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+            <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-brand-500 rounded-2xl p-8 text-center transition-all bg-slate-950/40 hover:bg-slate-950/80 cursor-pointer group">
+                <input type="file" id="fileInput" name="files" multiple class="hidden">
+                
+                <div class="max-w-md mx-auto space-y-3">
+                    <div class="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto group-hover:scale-110 group-hover:bg-brand-500/20 transition-all">
+                        <i data-lucide="upload-cloud" class="w-7 h-7"></i>
+                    </div>
+
+                    <div>
+                        <span class="text-sm font-semibold text-white group-hover:text-brand-300 transition">
+                            Click to browse or drag and drop files here
+                        </span>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Upload single or multiple files simultaneously (Up to 500 MB per batch)
+                        </p>
+                    </div>
+
+                    <!-- File Type Pills -->
+                    <div class="flex flex-wrap items-center justify-center gap-2 pt-2 text-[11px]">
+                        <span class="px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-300 border border-pink-500/20 flex items-center gap-1">
+                            <i data-lucide="image" class="w-3 h-3"></i> Images (PNG, JPG, SVG, etc.)
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20 flex items-center gap-1">
+                            <i data-lucide="file-text" class="w-3 h-3"></i> Word (.docx, .doc)
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-300 border border-orange-500/20 flex items-center gap-1">
+                            <i data-lucide="presentation" class="w-3 h-3"></i> PowerPoint (.pptx, .ppt)
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center gap-1">
+                            <i data-lucide="sheet" class="w-3 h-3"></i> Excel & PDFs
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                            + More Types
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Progress Bar (hidden by default) -->
+            <div id="uploadProgressContainer" class="hidden mt-4 p-4 rounded-xl bg-slate-900 border border-slate-800">
+                <div class="flex items-center justify-between text-xs mb-1.5">
+                    <span id="uploadStatusText" class="font-medium text-brand-300 flex items-center gap-2">
+                        <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-brand-400"></i> Uploading files...
+                    </span>
+                    <span id="uploadPercentText" class="font-mono text-white font-semibold">0%</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div id="uploadProgressBar" class="h-full bg-brand-500 rounded-full transition-all duration-200" style="width: 0%"></div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Category Filter Bar, Search & Toolbar -->
+    <div class="space-y-4">
+        
+        <!-- Category Filter Pills -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            {% set categories = [
+                ('all', 'All Files', 'layers', 'text-slate-300'),
+                ('image', 'Images', 'image', 'text-pink-400'),
+                ('word', 'Word Docs', 'file-text', 'text-blue-400'),
+                ('powerpoint', 'PowerPoint', 'presentation', 'text-orange-400'),
+                ('spreadsheet', 'Spreadsheets', 'sheet', 'text-emerald-400'),
+                ('pdf', 'PDFs', 'file-text', 'text-rose-400'),
+                ('text', 'Code & Text', 'code', 'text-amber-400'),
+                ('media', 'Media', 'film', 'text-purple-400'),
+                ('archive', 'Archives', 'archive', 'text-cyan-400'),
+                ('other', 'Other', 'file', 'text-slate-400')
+            ] %}
+
+            {% for cat_key, cat_name, cat_icon, cat_color in categories %}
+                {% set is_active = (active_category == cat_key) %}
+                <a href="{{ url_for('dashboard', category=cat_key, q=search_query, sort=current_sort) }}"
+                   class="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all
+                          {{ 'bg-brand-600 text-white shadow-md shadow-brand-500/25' if is_active else 'bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800' }}">
+                    <i data-lucide="{{ cat_icon }}" class="w-3.5 h-3.5 {{ 'text-white' if is_active else cat_color }}"></i>
+                    {{ cat_name }}
+                </a>
+            {% endfor %}
+        </div>
+
+        <!-- Search Bar, Sorting & View Toggle -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+            
+            <!-- Search Input -->
+            <form method="GET" action="{{ url_for('dashboard') }}" class="w-full sm:w-80 relative">
+                <input type="hidden" name="category" value="{{ active_category }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                </span>
+                <input type="text" name="q" value="{{ search_query }}" placeholder="Search files by name..."
+                       class="w-full pl-10 pr-10 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-brand-500 transition">
+                {% if search_query %}
+                    <a href="{{ url_for('dashboard', category=active_category, sort=current_sort) }}" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-white">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+            </form>
+
+            <!-- Sorting & View Switcher -->
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                
+                <!-- Sort Dropdown -->
+                <div class="relative flex items-center text-xs">
+                    <span class="text-slate-400 mr-2 hidden sm:inline">Sort by:</span>
+                    <select onchange="window.location.href=this.value"
+                            class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500 cursor-pointer">
+                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='newest') }}" {{ 'selected' if current_sort == 'newest' }}>Newest First</option>
+                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='oldest') }}" {{ 'selected' if current_sort == 'oldest' }}>Oldest First</option>
+                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='name_asc') }}" {{ 'selected' if current_sort == 'name_asc' }}>Name (A - Z)</option>
+                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='name_desc') }}" {{ 'selected' if current_sort == 'name_desc' }}>Name (Z - A)</option>
+                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='size_desc') }}" {{ 'selected' if current_sort == 'size_desc' }}>Size (Largest)</option>
+                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='size_asc') }}" {{ 'selected' if current_sort == 'size_asc' }}>Size (Smallest)</option>
+                    </select>
+                </div>
+
+                <!-- View Switcher (Grid vs List) -->
+                <div class="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800">
+                    <button type="button" id="gridViewBtn" onclick="switchView('grid')" title="Grid View"
+                            class="p-1.5 rounded-lg text-white bg-slate-800 transition">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                    </button>
+                    <button type="button" id="listViewBtn" onclick="switchView('list')" title="List View"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white transition">
+                        <i data-lucide="list" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Files Container -->
+    {% if files and files|length > 0 %}
+        
+        <!-- 1. GRID VIEW -->
+        <div id="filesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {% for file in files %}
+                
+                <!-- Category Styling Specs -->
+                {% set badge_info = {
+                    'image': {'border': 'border-pink-500/20', 'bg': 'bg-pink-500/10', 'text': 'text-pink-400', 'icon': 'image', 'label': 'Image'},
+                    'word': {'border': 'border-blue-500/30', 'bg': 'bg-blue-500/10', 'text': 'text-blue-400', 'icon': 'file-text', 'label': 'Word Doc'},
+                    'powerpoint': {'border': 'border-orange-500/30', 'bg': 'bg-orange-500/10', 'text': 'text-orange-400', 'icon': 'presentation', 'label': 'PowerPoint'},
+                    'spreadsheet': {'border': 'border-emerald-500/30', 'bg': 'bg-emerald-500/10', 'text': 'text-emerald-400', 'icon': 'sheet', 'label': 'Excel / Sheet'},
+                    'pdf': {'border': 'border-rose-500/30', 'bg': 'bg-rose-500/10', 'text': 'text-rose-400', 'icon': 'file-text', 'label': 'PDF Doc'},
+                    'text': {'border': 'border-amber-500/20', 'bg': 'bg-amber-500/10', 'text': 'text-amber-400', 'icon': 'code', 'label': 'Code/Text'},
+                    'media': {'border': 'border-purple-500/20', 'bg': 'bg-purple-500/10', 'text': 'text-purple-400', 'icon': 'film', 'label': 'Media'},
+                    'archive': {'border': 'border-cyan-500/20', 'bg': 'bg-cyan-500/10', 'text': 'text-cyan-400', 'icon': 'archive', 'label': 'Archive'},
+                    'other': {'border': 'border-slate-700', 'bg': 'bg-slate-800', 'text': 'text-slate-400', 'icon': 'file', 'label': 'File'}
+                } %}
+                {% set badge = badge_info.get(file['category'], badge_info['other']) %}
+
+                <div class="glass-card rounded-2xl border border-slate-800 p-4 flex flex-col justify-between group relative overflow-hidden">
+                    
+                    <!-- Top Category & Action Menu -->
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider {{ badge['bg'] }} {{ badge['text'] }} border {{ badge['border'] }} flex items-center gap-1">
+                            <i data-lucide="{{ badge['icon'] }}" class="w-3 h-3"></i> {{ badge['label'] }}
+                        </span>
+                        
+                        <div class="flex items-center gap-1">
+                            <!-- Rename Button -->
+                            <button onclick="openRenameModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')" title="Rename"
+                                    class="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition">
+                                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <!-- Delete Button -->
+                            <button onclick="openDeleteModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')" title="Delete"
+                                    class="p-1 rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Visual Thumbnail / Icon Banner -->
+                    <div class="w-full h-32 rounded-xl bg-slate-950/70 border border-slate-800/80 mb-3 flex items-center justify-center overflow-hidden cursor-pointer"
+                         onclick="openPreview('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}', '{{ file['category'] }}', '{{ file['file_ext'] }}', '{{ file['file_size']|format_bytes }}')">
+                        {% if file['category'] == 'image' %}
+                            <img src="{{ url_for('preview_file', file_id=file['id']) }}" alt="{{ file['filename'] }}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                        {% elif file['category'] == 'word' %}
+                            <div class="flex flex-col items-center text-blue-400 group-hover:scale-110 transition-transform">
+                                <i data-lucide="file-text" class="w-12 h-12"></i>
+                                <span class="text-[10px] font-mono mt-1 font-bold">.{{ file['file_ext']|upper }}</span>
+                            </div>
+                        {% elif file['category'] == 'powerpoint' %}
+                            <div class="flex flex-col items-center text-orange-400 group-hover:scale-110 transition-transform">
+                                <i data-lucide="presentation" class="w-12 h-12"></i>
+                                <span class="text-[10px] font-mono mt-1 font-bold">.{{ file['file_ext']|upper }}</span>
+                            </div>
+                        {% elif file['category'] == 'spreadsheet' %}
+                            <div class="flex flex-col items-center text-emerald-400 group-hover:scale-110 transition-transform">
+                                <i data-lucide="sheet" class="w-12 h-12"></i>
+                                <span class="text-[10px] font-mono mt-1 font-bold">.{{ file['file_ext']|upper }}</span>
+                            </div>
+                        {% elif file['category'] == 'pdf' %}
+                            <div class="flex flex-col items-center text-rose-400 group-hover:scale-110 transition-transform">
+                                <i data-lucide="file-text" class="w-12 h-12"></i>
+                                <span class="text-[10px] font-mono mt-1 font-bold">PDF</span>
+                            </div>
+                        {% elif file['category'] == 'media' %}
+                            <div class="flex flex-col items-center text-purple-400 group-hover:scale-110 transition-transform">
+                                <i data-lucide="play-circle" class="w-12 h-12"></i>
+                                <span class="text-[10px] font-mono mt-1 font-bold">.{{ file['file_ext']|upper }}</span>
+                            </div>
+                        {% else %}
+                            <div class="flex flex-col items-center text-slate-400 group-hover:scale-110 transition-transform">
+                                <i data-lucide="{{ badge['icon'] }}" class="w-12 h-12"></i>
+                                <span class="text-[10px] font-mono mt-1 font-bold">.{{ file['file_ext']|upper }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- File Information -->
+                    <div class="mb-3">
+                        <h4 class="text-sm font-semibold text-white truncate" title="{{ file['filename'] }}">
+                            {{ file['filename'] }}
+                        </h4>
+                        <div class="flex items-center justify-between text-xs text-slate-400 mt-1">
+                            <span class="font-mono">{{ file['file_size']|format_bytes }}</span>
+                            <span>{{ file['created_at'][:10] }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80">
+                        <button type="button" onclick="openPreview('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}', '{{ file['category'] }}', '{{ file['file_ext'] }}', '{{ file['file_size']|format_bytes }}')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-white flex items-center justify-center gap-1.5 transition">
+                            <i data-lucide="eye" class="w-3.5 h-3.5"></i> Preview
+                        </button>
+                        <a href="{{ url_for('download_file', file_id=file['id']) }}"
+                           class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 flex items-center justify-center gap-1.5 shadow-md shadow-brand-500/20 transition">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
+                        </a>
+                    </div>
+
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- 2. LIST / TABLE VIEW (hidden by default) -->
+        <div id="filesList" class="hidden glass-panel rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold border-b border-slate-800 text-[11px]">
+                        <tr>
+                            <th class="px-4 py-3">File Name</th>
+                            <th class="px-4 py-3">Category</th>
+                            <th class="px-4 py-3">Size</th>
+                            <th class="px-4 py-3">Uploaded On</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for file in files %}
+                            {% set badge_info = {
+                                'image': {'bg': 'bg-pink-500/10', 'text': 'text-pink-400', 'border': 'border-pink-500/20', 'icon': 'image', 'label': 'Image'},
+                                'word': {'bg': 'bg-blue-500/10', 'text': 'text-blue-400', 'border': 'border-blue-500/20', 'icon': 'file-text', 'label': 'Word Doc'},
+                                'powerpoint': {'bg': 'bg-orange-500/10', 'text': 'text-orange-400', 'border': 'border-orange-500/20', 'icon': 'presentation', 'label': 'PowerPoint'},
+                                'spreadsheet': {'bg': 'bg-emerald-500/10', 'text': 'text-emerald-400', 'border': 'border-emerald-500/20', 'icon': 'sheet', 'label': 'Excel'},
+                                'pdf': {'bg': 'bg-rose-500/10', 'text': 'text-rose-400', 'border': 'border-rose-500/20', 'icon': 'file-text', 'label': 'PDF'},
+                                'text': {'bg': 'bg-amber-500/10', 'text': 'text-amber-400', 'border': 'border-amber-500/20', 'icon': 'code', 'label': 'Code/Text'},
+                                'media': {'bg': 'bg-purple-500/10', 'text': 'text-purple-400', 'border': 'border-purple-500/20', 'icon': 'film', 'label': 'Media'},
+                                'archive': {'bg': 'bg-cyan-500/10', 'text': 'text-cyan-400', 'border': 'border-cyan-500/20', 'icon': 'archive', 'label': 'Archive'},
+                                'other': {'bg': 'bg-slate-800', 'text': 'text-slate-400', 'border': 'border-slate-700', 'icon': 'file', 'label': 'File'}
+                            } %}
+                            {% set badge = badge_info.get(file['category'], badge_info['other']) %}
+                            <tr class="hover:bg-slate-800/40 transition">
+                                <td class="px-4 py-3 font-medium text-white flex items-center gap-2 max-w-xs truncate">
+                                    <i data-lucide="{{ badge['icon'] }}" class="w-4 h-4 {{ badge['text'] }} flex-shrink-0"></i>
+                                    <span class="truncate" title="{{ file['filename'] }}">{{ file['filename'] }}</span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold {{ badge['bg'] }} {{ badge['text'] }} border {{ badge['border'] }}">
+                                        {{ badge['label'] }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 font-mono">{{ file['file_size']|format_bytes }}</td>
+                                <td class="px-4 py-3 text-slate-400">{{ file['created_at'][:16] }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button onclick="openPreview('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}', '{{ file['category'] }}', '{{ file['file_ext'] }}', '{{ file['file_size']|format_bytes }}')"
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Preview">
+                                            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                        <a href="{{ url_for('download_file', file_id=file['id']) }}"
+                                           class="p-1.5 rounded-lg text-brand-400 hover:text-white hover:bg-brand-600 transition" title="Download">
+                                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                        </a>
+                                        <button onclick="openRenameModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')"
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Rename">
+                                            <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                        <button onclick="openDeleteModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')"
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition" title="Delete">
+                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    {% else %}
+        
+        <!-- Empty State -->
+        <div class="glass-panel p-12 rounded-3xl border border-slate-800 text-center max-w-lg mx-auto">
+            <div class="w-16 h-16 rounded-3xl bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="folder-open" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-white">No Files Found</h3>
+            <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                {% if search_query or active_category != 'all' %}
+                    No files matched your filter query "<span class="text-white">{{ search_query or active_category }}</span>".
+                {% else %}
+                    Your vault is currently empty. Drag and drop files above to start storing your files securely.
+                {% endif %}
+            </p>
+            {% if search_query or active_category != 'all' %}
+                <a href="{{ url_for('dashboard') }}" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-white hover:bg-slate-700 transition">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Reset Filters
+                </a>
+            {% endif %}
+        </div>
+
+    {% endif %}
+
+    <!-- MODAL 1: Create New Folder -->
+    <div id="newFolderModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-md rounded-3xl border border-slate-800 shadow-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                        <i data-lucide="folder-plus" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-white">Create New Folder</h3>
+                </div>
+                <button type="button" onclick="closeModal('newFolderModal')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ url_for('create_folder') }}" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Folder Name</label>
+                    <input type="text" name="folder_name" required placeholder="e.g. Projects, Personal, Worksheets..."
+                           class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:border-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Color Accent</label>
+                    <select name="folder_color" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm">
+                        <option value="indigo">Indigo Blue</option>
+                        <option value="emerald">Emerald Green</option>
+                        <option value="amber">Amber Gold</option>
+                        <option value="rose">Rose Red</option>
+                        <option value="purple">Purple</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('newFolderModal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/20">Create Folder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Create Word Document (.docx) -->
+    <div id="newWordModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                        <i data-lucide="file-text" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">New Microsoft Word Document</h3>
+                        <p class="text-[11px] text-slate-400">Creates an authentic, editable .docx document stored in MongoDB.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('newWordModal')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ url_for('create_word_file') }}" class="space-y-3.5">
+                <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">File Name</label>
+                    <input type="text" name="filename" required value="New_Document.docx" placeholder="e.g. Project_Report.docx"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Document Heading / Title</label>
+                    <input type="text" name="title" required placeholder="e.g. CloudVault Project Overview"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Subtitle / Brief Summary</label>
+                    <input type="text" name="description" placeholder="e.g. Confidential company document"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Content / Paragraphs</label>
+                    <textarea name="content" rows="4" placeholder="Enter paragraph content or bullet points (start lines with - for bullets)..."
+                              class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-blue-500"></textarea>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('newWordModal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/20">Generate Word Doc</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Create Excel Spreadsheet (.xlsx) -->
+    <div id="newExcelModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                        <i data-lucide="sheet" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">New Microsoft Excel Spreadsheet</h3>
+                        <p class="text-[11px] text-slate-400">Creates an authentic, styled .xlsx workbook stored in MongoDB.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('newExcelModal')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ url_for('create_excel_file') }}" class="space-y-3.5">
+                <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">File Name</label>
+                    <input type="text" name="filename" required value="Spreadsheet.xlsx" placeholder="e.g. Budget_2026.xlsx"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-emerald-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Sheet Tab Name</label>
+                        <input type="text" name="sheet_name" value="DataSheet" class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Table Title</label>
+                        <input type="text" name="title" value="Financial Summary" class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Column Headers (Comma-Separated)</label>
+                    <input type="text" name="headers" value="ID, Item Name, Category, Quantity, Amount (INR), Status"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-emerald-500">
+                    <p class="text-[10px] text-slate-500 mt-1">Separate columns with commas. A starter formatted table with sample data will be created.</p>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('newExcelModal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-500/20">Generate Excel Sheet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 4: Create PowerPoint Presentation (.pptx) -->
+    <div id="newPptModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center">
+                        <i data-lucide="presentation" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">New Microsoft PowerPoint (.pptx)</h3>
+                        <p class="text-[11px] text-slate-400">Creates a widescreen 16:9 presentation slide deck in MongoDB.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('newPptModal')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ url_for('create_powerpoint_file') }}" class="space-y-3.5">
+                <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">File Name</label>
+                    <input type="text" name="filename" required value="Presentation.pptx" placeholder="e.g. Project_Pitch.pptx"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:border-orange-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Main Presentation Title</label>
+                    <input type="text" name="title" required placeholder="e.g. CloudVault Architecture & Deployment"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-orange-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Subtitle / Tagline</label>
+                    <input type="text" name="subtitle" placeholder="e.g. Enterprise File Storage Platform"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-orange-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Slide 2 Bullet Points (One per line)</label>
+                    <textarea name="bullets" rows="3" placeholder="Key highlight 1&#10;Key highlight 2&#10;Key highlight 3..."
+                              class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:border-orange-500"></textarea>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('newPptModal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white shadow-md shadow-orange-500/20">Generate Presentation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 5: Create Text / Note (.txt) -->
+    <div id="newTextModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-md rounded-3xl border border-slate-800 shadow-2xl p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                        <i data-lucide="code" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-white">Create Quick Text File</h3>
+                </div>
+                <button type="button" onclick="closeModal('newTextModal')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ url_for('create_text_file') }}" class="space-y-3.5">
+                <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">File Name</label>
+                    <input type="text" name="filename" required value="Note.txt" placeholder="e.g. Meeting_Notes.txt"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Heading / Subject</label>
+                    <input type="text" name="title" required placeholder="e.g. Daily Meeting Notes"
+                           class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Content</label>
+                    <textarea name="content" rows="4" placeholder="Type text or code here..."
+                              class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono"></textarea>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('newTextModal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-500/20">Save Text File</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 6: Confirm & Name Uploaded File(s) -->
+    <div id="uploadNameModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl p-6 space-y-4 max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-brand-500/10 text-brand-400 border border-brand-500/20 flex items-center justify-center">
+                        <i data-lucide="file-up" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 id="uploadModalTitle" class="text-base font-bold text-white">Save Uploaded File</h3>
+                        <p class="text-[11px] text-slate-400">Specify the file name before saving it to your cloud vault</p>
+                    </div>
+                </div>
+                <button type="button" onclick="cancelUploadModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Destination Info Badge -->
+            <div class="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 flex-shrink-0">
+                <span class="flex items-center gap-1.5 truncate">
+                    <i data-lucide="folder" class="w-4 h-4 text-brand-400 flex-shrink-0"></i>
+                    Destination: <strong class="text-white truncate">{{ current_folder['name'] if current_folder else 'My Vault (Root)' }}</strong>
+                </span>
+                <span id="uploadModalFileCount" class="font-mono text-[11px] text-brand-300 bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/20 flex-shrink-0">1 file</span>
+            </div>
+
+            <!-- Scrollable list of files to name -->
+            <div id="uploadFilesListContainer" class="space-y-3 overflow-y-auto flex-1 pr-1 max-h-[50vh]">
+                <!-- Populated dynamically by JavaScript -->
+            </div>
+
+            <!-- Footer Buttons -->
+            <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800 flex-shrink-0">
+                <button type="button" onclick="cancelUploadModal()" class="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition">
+                    Cancel
+                </button>
+                <button type="button" id="confirmSaveUploadBtn" onclick="confirmSaveUpload()" class="px-6 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white shadow-lg shadow-brand-500/25 flex items-center gap-2 transition transform hover:-translate-y-0.5">
+                    <i data-lucide="save" class="w-4 h-4"></i> Save File to Vault
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function openModal(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('hidden');
+            lucide.createIcons({ root: el });
+        }
+    }
+
+    function closeModal(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.add('hidden');
+        }
+    }
+    // View Switcher (Grid vs List)
+    function switchView(mode) {
+        const grid = document.getElementById('filesGrid');
+        const list = document.getElementById('filesList');
+        const gridBtn = document.getElementById('gridViewBtn');
+        const listBtn = document.getElementById('listViewBtn');
+
+        if (!grid || !list) return;
+
+        if (mode === 'grid') {
+            grid.classList.remove('hidden');
+            list.classList.add('hidden');
+            gridBtn.classList.add('text-white', 'bg-slate-800');
+            gridBtn.classList.remove('text-slate-400');
+            listBtn.classList.remove('text-white', 'bg-slate-800');
+            listBtn.classList.add('text-slate-400');
+            localStorage.setItem('cloudvault_view_pref', 'grid');
+            lucide.createIcons({ root: grid });
+        } else {
+            grid.classList.add('hidden');
+            list.classList.remove('hidden');
+            listBtn.classList.add('text-white', 'bg-slate-800');
+            listBtn.classList.remove('text-slate-400');
+            gridBtn.classList.remove('text-white', 'bg-slate-800');
+            gridBtn.classList.add('text-slate-400');
+            localStorage.setItem('cloudvault_view_pref', 'list');
+            lucide.createIcons({ root: list });
+        }
+    }
+
+    // Load view preference
+    const savedView = localStorage.getItem('cloudvault_view_pref');
+    if (savedView === 'list') {
+        switchView('list');
+    }
+
+    // Drag and Drop & AJAX Upload Handler
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const uploadForm = document.getElementById('uploadForm');
+    const progressContainer = document.getElementById('uploadProgressContainer');
+    const progressBar = document.getElementById('uploadProgressBar');
+    const percentText = document.getElementById('uploadPercentText');
+    const statusText = document.getElementById('uploadStatusText');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('border-brand-500', 'bg-brand-500/10');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('border-brand-500', 'bg-brand-500/10');
+        });
+    });
+
+    // Category and icon detection for upload modal preview
+    function detectCategoryJs(name) {
+        const ext = name.split('.').pop().toLowerCase();
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) {
+            return { category: 'image', icon: 'image', color: 'text-pink-400 bg-pink-500/10 border-pink-500/20' };
+        }
+        if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) {
+            return { category: 'word', icon: 'file-text', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
+        }
+        if (['ppt', 'pptx', 'odp', 'key'].includes(ext)) {
+            return { category: 'powerpoint', icon: 'presentation', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' };
+        }
+        if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) {
+            return { category: 'spreadsheet', icon: 'sheet', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+        }
+        if (['pdf'].includes(ext)) {
+            return { category: 'pdf', icon: 'file-text', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' };
+        }
+        if (['mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav'].includes(ext)) {
+            return { category: 'media', icon: 'film', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' };
+        }
+        if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+            return { category: 'archive', icon: 'archive', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' };
+        }
+        if (['txt', 'py', 'js', 'html', 'css', 'json', 'sql', 'md'].includes(ext)) {
+            return { category: 'text', icon: 'code', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+        }
+        return { category: 'other', icon: 'file', color: 'text-slate-400 bg-slate-800 border-slate-700' };
+    }
+
+    function formatBytesJs(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    let stagedUploadFiles = [];
+
+    // Prompt user for file name(s) before saving
+    function promptFileNameAndUpload(fileList) {
+        if (!fileList || fileList.length === 0) return;
+        stagedUploadFiles = Array.from(fileList);
+
+        const container = document.getElementById('uploadFilesListContainer');
+        const modalTitle = document.getElementById('uploadModalTitle');
+        const countBadge = document.getElementById('uploadModalFileCount');
+        const saveBtn = document.getElementById('confirmSaveUploadBtn');
+
+        modalTitle.innerText = stagedUploadFiles.length === 1 ? 'Save Uploaded File' : `Save ${stagedUploadFiles.length} Uploaded Files`;
+        countBadge.innerText = `${stagedUploadFiles.length} file${stagedUploadFiles.length > 1 ? 's' : ''}`;
+        saveBtn.innerHTML = `<i data-lucide="save" class="w-4 h-4"></i> Save ${stagedUploadFiles.length === 1 ? 'File' : 'All Files'} to Vault`;
+
+        let html = '';
+        stagedUploadFiles.forEach((file, index) => {
+            const catInfo = detectCategoryJs(file.name);
+            const sizeFormatted = formatBytesJs(file.size);
+            const lastDot = file.name.lastIndexOf('.');
+            const ext = lastDot > 0 ? file.name.substring(lastDot) : '';
+
+            html += `
+                <div class="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2.5">
+                    <div class="flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg ${catInfo.color} flex items-center justify-center">
+                                <i data-lucide="${catInfo.icon}" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-slate-400 font-mono text-[11px] truncate max-w-[220px]" title="${file.name}">Original: ${file.name}</span>
+                        </div>
+                        <span class="font-mono text-[10px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/60">${sizeFormatted}</span>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                            Save File Name:
+                        </label>
+                        <div class="relative flex items-center">
+                            <input type="text" id="customFileNameInput_${index}" value="${file.name}"
+                                   class="custom-filename-input w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs font-medium focus:border-brand-500 focus:outline-none pr-14"
+                                   placeholder="Enter name to save this file as..."
+                                   onkeydown="if(event.key === 'Enter') confirmSaveUpload();">
+                            <span class="absolute right-3 text-[10px] font-mono text-slate-400 pointer-events-none">${ext.toUpperCase()}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        const uploadModal = document.getElementById('uploadNameModal');
+        uploadModal.classList.remove('hidden');
+        lucide.createIcons({ root: uploadModal });
+
+        // Auto-focus and highlight the filename in the first input
+        setTimeout(() => {
+            const firstInput = document.getElementById('customFileNameInput_0');
+            if (firstInput) {
+                firstInput.focus();
+                const lastDot = firstInput.value.lastIndexOf('.');
+                if (lastDot > 0) {
+                    firstInput.setSelectionRange(0, lastDot);
+                } else {
+                    firstInput.select();
+                }
+            }
+        }, 120);
+    }
+
+    function cancelUploadModal() {
+        document.getElementById('uploadNameModal').classList.add('hidden');
+        document.getElementById('fileInput').value = '';
+        stagedUploadFiles = [];
+    }
+
+    function confirmSaveUpload() {
+        if (!stagedUploadFiles || stagedUploadFiles.length === 0) return;
+
+        const customNames = [];
+        for (let i = 0; i < stagedUploadFiles.length; i++) {
+            const input = document.getElementById(`customFileNameInput_${i}`);
+            let chosenName = input ? input.value.trim() : stagedUploadFiles[i].name;
+            if (!chosenName) chosenName = stagedUploadFiles[i].name;
+            customNames.push(chosenName);
+        }
+
+        document.getElementById('uploadNameModal').classList.add('hidden');
+        executeUploadWithCustomNames(stagedUploadFiles, customNames);
+    }
+
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files && files.length > 0) {
+            promptFileNameAndUpload(files);
+        }
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files && fileInput.files.length > 0) {
+            promptFileNameAndUpload(fileInput.files);
+        }
+    });
+
+    function executeUploadWithCustomNames(fileList, customNames) {
+        const formData = new FormData();
+        for (let i = 0; i < fileList.length; i++) {
+            formData.append('files', fileList[i]);
+            if (customNames && customNames[i]) {
+                formData.append('custom_filenames', customNames[i]);
+            }
+        }
+        const folderId = "{{ current_folder_id or '' }}";
+        if (folderId) {
+            formData.append('folder_id', folderId);
+        }
+
+        progressContainer.classList.remove('hidden');
+        progressBar.style.width = '0%';
+        progressBar.classList.remove('bg-emerald-500', 'bg-rose-500');
+        progressBar.classList.add('bg-brand-500');
+        percentText.innerText = '0%';
+        statusText.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin text-brand-400"></i> Saving ${fileList.length} file(s) to MongoDB...`;
+        lucide.createIcons({ root: statusText });
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/upload', true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = percent + '%';
+                percentText.innerText = percent + '%';
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    const res = JSON.parse(xhr.responseText);
+                    if (res.success) {
+                        statusText.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> ${res.message}`;
+                        progressBar.classList.remove('bg-brand-500');
+                        progressBar.classList.add('bg-emerald-500');
+                        lucide.createIcons({ root: statusText });
+                        setTimeout(() => window.location.reload(), 700);
+                    } else {
+                        statusText.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i> ${res.message || 'Upload error'}`;
+                        progressBar.classList.remove('bg-brand-500');
+                        progressBar.classList.add('bg-rose-500');
+                        lucide.createIcons({ root: statusText });
+                    }
+                } catch(e) {
+                    window.location.reload();
+                }
+            } else {
+                statusText.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4 text-rose-400"></i> Upload failed (Status ${xhr.status})`;
+                progressBar.classList.remove('bg-brand-500');
+                progressBar.classList.add('bg-rose-500');
+                lucide.createIcons({ root: statusText });
+            }
+            document.getElementById('fileInput').value = '';
+            stagedUploadFiles = [];
+        };
+
+        xhr.onerror = () => {
+            statusText.innerHTML = `<i data-lucide="wifi-off" class="w-4 h-4 text-rose-400"></i> Network connection error during upload.`;
+            lucide.createIcons({ root: statusText });
+            document.getElementById('fileInput').value = '';
+            stagedUploadFiles = [];
+        };
+
+        xhr.send(formData);
+    }
+</script>
+{% endblock %}
+

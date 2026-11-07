@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Cloud Vault - Multi-User File Storage & Management{% endblock %}</title>
+    
+    <!-- Local Precompiled Tailwind CSS (Ultra-fast, zero-CDN latency, 100% offline reliable) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.min.css') }}">
+
+    <!-- Local Lucide Icons -->
+    <script src="{{ url_for('static', filename='js/lucide.min.js') }}"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .glass-card:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            transform: translateY(-2px);
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-full flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- Top Navigation Bar -->
+    <nav class="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                
+                <!-- Logo & Brand -->
+                <div class="flex items-center space-x-3">
+                    <a href="{{ url_for('index') }}" class="flex items-center space-x-3 group">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-violet-500 flex items-center justify-center shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform">
+                            <i data-lucide="cloud" class="w-6 h-6 text-white"></i>
+                        </div>
+                        <div>
+                            <span class="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-brand-300 bg-clip-text text-transparent">
+                                CloudVault
+                            </span>
+                            <span class="text-xs block text-slate-400 font-medium">Enterprise Files Access</span>
+                        </div>
+                    </a>
+
+                    {% if session.get('role') == 'admin' %}
+                    <span class="ml-2 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Admin Portal
+                    </span>
+                    {% endif %}
+                </div>
+
+                <!-- Navigation Links -->
+                <div class="flex items-center space-x-3">
+                    {% if session.get('user_id') %}
+                        <!-- Authenticated User Links -->
+                        {% if session.get('role') == 'admin' %}
+                            <a href="{{ url_for('admin_dashboard') }}" class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+                                <i data-lucide="users" class="w-4 h-4"></i> Approvals & Users
+                            </a>
+                            <a href="{{ url_for('admin_files') }}" class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+                                <i data-lucide="folder-search" class="w-4 h-4"></i> Global Files
+                            </a>
+                        {% endif %}
+
+                        <a href="{{ url_for('dashboard') }}" class="px-3 py-1.5 rounded-lg text-sm font-medium text-brand-300 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/30 transition flex items-center gap-1.5">
+                            <i data-lucide="folder" class="w-4 h-4"></i> My Vault
+                        </a>
+                        <a href="{{ url_for('user_settings') }}" class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+                            <i data-lucide="settings" class="w-4 h-4"></i> Settings
+                        </a>
+
+                        <!-- User Profile Menu -->
+                        <div class="flex items-center pl-3 border-l border-slate-800 space-x-3">
+                            <a href="{{ url_for('user_settings') }}" class="flex items-center space-x-2 group" title="Account Settings">
+                                <div class="text-right hidden sm:block">
+                                    <div class="text-sm font-medium text-white group-hover:text-brand-300 transition">{{ session.get('username') }}</div>
+                                    <div class="text-xs text-slate-400 capitalize">{{ session.get('role') }}</div>
+                                </div>
+                                <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-brand-400 group-hover:border-brand-500 transition">
+                                    {{ session.get('username', 'U')[0]|upper }}
+                                </div>
+                            </a>
+                            <a href="{{ url_for('logout') }}" title="Sign Out" class="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition">
+                                <i data-lucide="log-out" class="w-4 h-4"></i>
+                            </a>
+                        </div>
+                    {% else %}
+                        <!-- Public Links -->
+                        <a href="{{ url_for('login') }}" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+                            <i data-lucide="log-in" class="w-4 h-4"></i> Sign In
+                        </a>
+                        <a href="{{ url_for('register') }}" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 shadow-md shadow-brand-500/25 transition flex items-center gap-1.5">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i> Register Account
+                        </a>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash Messages Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 w-full">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                        {% set cat_colors = {
+                            'success': 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300',
+                            'danger': 'bg-rose-500/10 border-rose-500/30 text-rose-300',
+                            'warning': 'bg-amber-500/10 border-amber-500/30 text-amber-300',
+                            'info': 'bg-sky-500/10 border-sky-500/30 text-sky-300'
+                        } %}
+                        {% set cat_icon = {
+                            'success': 'check-circle-2',
+                            'danger': 'alert-circle',
+                            'warning': 'alert-triangle',
+                            'info': 'info'
+                        } %}
+                        <div class="flex items-center justify-between p-3.5 rounded-xl border backdrop-blur-sm {{ cat_colors.get(category, 'bg-slate-800 border-slate-700 text-slate-200') }} transition">
+                            <div class="flex items-center gap-3">
+                                <i data-lucide="{{ cat_icon.get(category, 'bell') }}" class="w-5 h-5 flex-shrink-0"></i>
+                                <span class="text-sm font-medium">{{ message }}</span>
+                            </div>
+                            <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white p-1 rounded-md">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Body Content Block -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Universal Preview Modal -->
+    <div id="previewModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div id="previewIconWrap" class="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
+                        <i id="previewHeaderIcon" data-lucide="file" class="w-5 h-5 text-brand-400"></i>
+                    </div>
+                    <div class="truncate">
+                        <h3 id="previewTitle" class="text-base font-semibold text-white truncate">Filename</h3>
+                        <p id="previewSubtitle" class="text-xs text-slate-400">File Type • Size</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a id="previewDownloadBtn" href="#" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white flex items-center gap-1.5 transition">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i> Download
+                    </a>
+                    <button onclick="closePreviewModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body Container -->
+            <div id="previewBody" class="flex-grow p-6 overflow-auto flex items-center justify-center min-h-[300px] bg-slate-950/50">
+                <div id="previewSpinner" class="flex flex-col items-center gap-3 text-slate-400">
+                    <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-brand-500"></i>
+                    <span class="text-sm">Loading preview...</span>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3 border-t border-slate-800/80 bg-slate-900/80 text-xs text-slate-400 flex justify-between items-center">
+                <span id="previewFooterMeta">Safe multi-user storage</span>
+                <button onclick="closePreviewModal()" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename File Modal -->
+    <div id="renameModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <h3 class="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                <i data-lucide="edit-3" class="w-5 h-5 text-brand-400"></i> Rename File
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Enter a new display name for this file in your vault.</p>
+            <form id="renameForm" method="POST" action="">
+                <input type="text" id="newFilenameInput" name="new_filename" required
+                       class="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 mb-4 text-sm">
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeRenameModal()" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 transition">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <div class="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mb-4">
+                <i data-lucide="trash-2" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-1">Delete File?</h3>
+            <p class="text-sm text-slate-400 mb-4">Are you sure you want to permanently delete <span id="deleteFileName" class="text-white font-medium">this file</span>? This action cannot be undone.</p>
+            <form id="deleteForm" method="POST" action="">
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-500 transition">Delete Permanently</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 py-6 mt-12 bg-slate-950/60 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div>
+                © 2026 CloudVault Systems • Multi-User Isolated File Access Storage
+            </div>
+            <div class="flex items-center gap-4 text-slate-400">
+                <span class="flex items-center gap-1"><i data-lucide="shield" class="w-3.5 h-3.5 text-emerald-400"></i> Admin Verified</span>
+                <span class="flex items-center gap-1"><i data-lucide="hard-drive" class="w-3.5 h-3.5 text-brand-400"></i> Secure Storage</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Initialize Lucide Icons -->
+    <script>
+        lucide.createIcons();
+
+        // Universal Preview Modal Logic
+        function openPreview(fileId, filename, category, ext, size) {
+            const modal = document.getElementById('previewModal');
+            const title = document.getElementById('previewTitle');
+            const subtitle = document.getElementById('previewSubtitle');
+            const downloadBtn = document.getElementById('previewDownloadBtn');
+            const body = document.getElementById('previewBody');
+            const icon = document.getElementById('previewHeaderIcon');
+
+            title.innerText = filename;
+            subtitle.innerText = `${category.toUpperCase()} • ${size}`;
+            downloadBtn.href = `/download/${fileId}`;
+            modal.classList.remove('hidden');
+
+            const previewUrl = `/preview/${fileId}`;
+
+            if (category === 'image') {
+                body.innerHTML = `
+                    <div class="flex flex-col items-center justify-center max-h-[70vh]">
+                        <img src="${previewUrl}" alt="${filename}" class="max-h-[65vh] max-w-full rounded-lg object-contain shadow-lg border border-slate-800">
+                    </div>
+                `;
+            } else if (category === 'pdf') {
+                body.innerHTML = `
+                    <iframe src="${previewUrl}" class="w-full h-[65vh] rounded-lg border border-slate-800 bg-white"></iframe>
+                `;
+            } else if (category === 'media') {
+                const isVideo = ['mp4', 'webm', 'mov', 'mkv', 'avi'].includes(ext.toLowerCase());
+                if (isVideo) {
+                    body.innerHTML = `
+                        <video controls class="max-h-[65vh] max-w-full rounded-lg shadow-lg">
+                            <source src="${previewUrl}" type="video/${ext}">
+                            Your browser does not support video playback.
+                        </video>
+                    `;
+                } else {
+                    body.innerHTML = `
+                        <div class="p-8 flex flex-col items-center gap-4">
+                            <i data-lucide="music" class="w-16 h-16 text-brand-400"></i>
+                            <audio controls class="w-full max-w-md">
+                                <source src="${previewUrl}" type="audio/${ext}">
+                                Your browser does not support audio playback.
+                            </audio>
+                        </div>
+                    `;
+                }
+            } else if (category === 'text') {
+                body.innerHTML = `
+                    <div class="flex flex-col items-center justify-center p-8">
+                        <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-brand-500 mb-2"></i>
+                        <span class="text-sm text-slate-400">Loading text preview...</span>
+                    </div>
+                `;
+                fetch(`/api/preview-text/${fileId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            body.innerHTML = `
+                                <pre class="w-full text-xs text-slate-200 bg-slate-950 p-4 rounded-xl border border-slate-800 overflow-auto max-h-[65vh] whitespace-pre-wrap"><code>${escapeHtml(data.content)}</code></pre>
+                            `;
+                        } else {
+                            body.innerHTML = `
+                                <div class="text-center p-6 text-slate-400">
+                                    <p class="text-sm mb-3">${data.message}</p>
+                                    <a href="${downloadBtn.href}" class="px-4 py-2 rounded-lg bg-brand-600 text-white text-xs font-semibold">Download File</a>
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(() => {
+                        body.innerHTML = `<p class="text-sm text-rose-400">Failed to load text preview.</p>`;
+                    });
+            } else if (category === 'word') {
+                body.innerHTML = `
+                    <div class="text-center p-8 flex flex-col items-center max-w-md">
+                        <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mb-4">
+                            <i data-lucide="file-text" class="w-8 h-8"></i>
+                        </div>
+                        <h4 class="text-lg font-semibold text-white mb-1">Microsoft Word Document</h4>
+                        <p class="text-xs text-slate-400 mb-6">Word files (.doc, .docx) are stored securely. Click below to download and view or edit in Microsoft Word.</p>
+                        <a href="${downloadBtn.href}" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold flex items-center gap-2 shadow-lg shadow-blue-500/20 transition">
+                            <i data-lucide="download" class="w-4 h-4"></i> Download Word Document
+                        </a>
+                    </div>
+                `;
+            } else if (category === 'powerpoint') {
+                body.innerHTML = `
+                    <div class="text-center p-8 flex flex-col items-center max-w-md">
+                        <div class="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center mb-4">
+                            <i data-lucide="presentation" class="w-8 h-8"></i>
+                        </div>
+                        <h4 class="text-lg font-semibold text-white mb-1">Microsoft PowerPoint Presentation</h4>
+                        <p class="text-xs text-slate-400 mb-6">PowerPoint slides (.ppt, .pptx) are safely stored in your private vault. Download anytime to present or edit.</p>
+                        <a href="${downloadBtn.href}" class="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold flex items-center gap-2 shadow-lg shadow-orange-500/20 transition">
+                            <i data-lucide="download" class="w-4 h-4"></i> Download PowerPoint Slides
+                        </a>
+                    </div>
+                `;
+            } else if (category === 'spreadsheet') {
+                body.innerHTML = `
+                    <div class="text-center p-8 flex flex-col items-center max-w-md">
+                        <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4">
+                            <i data-lucide="sheet" class="w-8 h-8"></i>
+                        </div>
+                        <h4 class="text-lg font-semibold text-white mb-1">Spreadsheet / Excel Sheet</h4>
+                        <p class="text-xs text-slate-400 mb-6">Excel spreadsheets (.xlsx, .csv) are archived with full fidelity. Download to calculate or manipulate.</p>
+                        <a href="${downloadBtn.href}" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition">
+                            <i data-lucide="download" class="w-4 h-4"></i> Download Spreadsheet
+                        </a>
+                    </div>
+                `;
+            } else {
+                body.innerHTML = `
+                    <div class="text-center p-8 flex flex-col items-center max-w-md">
+                        <div class="w-16 h-16 rounded-2xl bg-slate-800 text-slate-300 flex items-center justify-center mb-4">
+                            <i data-lucide="file" class="w-8 h-8"></i>
+                        </div>
+                        <h4 class="text-lg font-semibold text-white mb-1">${filename}</h4>
+                        <p class="text-xs text-slate-400 mb-6">Stored safely in your vault (${size}). Direct download is available.</p>
+                        <a href="${downloadBtn.href}" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold flex items-center gap-2 shadow-lg shadow-brand-500/20 transition">
+                            <i data-lucide="download" class="w-4 h-4"></i> Download File
+                        </a>
+                    </div>
+                `;
+            }
+
+            lucide.createIcons();
+        }
+
+        function closePreviewModal() {
+            document.getElementById('previewModal').classList.add('hidden');
+            document.getElementById('previewBody').innerHTML = '';
+        }
+
+        // Rename Modal Logic
+        function openRenameModal(fileId, currentName) {
+            const modal = document.getElementById('renameModal');
+            const form = document.getElementById('renameForm');
+            const input = document.getElementById('newFilenameInput');
+            form.action = `/rename/${fileId}`;
+            input.value = currentName;
+            modal.classList.remove('hidden');
+            input.focus();
+        }
+
+        function closeRenameModal() {
+            document.getElementById('renameModal').classList.add('hidden');
+        }
+
+        // Delete Modal Logic
+        function openDeleteModal(fileId, filename, fromAdmin = false) {
+            const modal = document.getElementById('deleteModal');
+            const form = document.getElementById('deleteForm');
+            const nameSpan = document.getElementById('deleteFileName');
+            form.action = `/delete/${fileId}${fromAdmin ? '?from=admin' : ''}`;
+            nameSpan.innerText = `'${filename}'`;
+            modal.classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.add('hidden');
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Close modals on Escape key
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closePreviewModal();
+                closeRenameModal();
+                closeDeleteModal();
+            }
+        });
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+

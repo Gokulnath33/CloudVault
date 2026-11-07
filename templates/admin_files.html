@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Global File Explorer - Administrator{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Admin Top Bar -->
+    <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xl shadow-lg shadow-brand-500/10">
+                <i data-lucide="folder-search" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                    Global System File Explorer
+                </h1>
+                <p class="text-xs text-slate-400 mt-0.5">Audit, preview, and download any file stored across all user directories.</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="{{ url_for('admin_dashboard') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Admin Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Category Filters -->
+    <div class="space-y-4">
+        <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            {% set categories = [
+                ('all', 'All Files', 'layers'),
+                ('image', 'Images', 'image'),
+                ('word', 'Word Docs', 'file-text'),
+                ('powerpoint', 'PowerPoint', 'presentation'),
+                ('spreadsheet', 'Spreadsheets', 'sheet'),
+                ('pdf', 'PDFs', 'file-text'),
+                ('text', 'Code & Text', 'code'),
+                ('media', 'Media', 'film'),
+                ('archive', 'Archives', 'archive'),
+                ('other', 'Other', 'file')
+            ] %}
+
+            {% for cat_key, cat_name, cat_icon in categories %}
+                {% set is_active = (active_category == cat_key) %}
+                <a href="{{ url_for('admin_files', category=cat_key, q=search_query, sort=current_sort) }}"
+                   class="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all
+                          {{ 'bg-brand-600 text-white shadow-md shadow-brand-500/25' if is_active else 'bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800' }}">
+                    <i data-lucide="{{ cat_icon }}" class="w-3.5 h-3.5"></i>
+                    {{ cat_name }}
+                </a>
+            {% endfor %}
+        </div>
+
+        <!-- Search, User Filter & Sort -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <form method="GET" action="{{ url_for('admin_files') }}" class="w-full sm:w-80 relative">
+                <input type="hidden" name="category" value="{{ active_category }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="user_id" value="{{ selected_user_id or '' }}">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                </span>
+                <input type="text" name="q" value="{{ search_query }}" placeholder="Search filename or username..."
+                       class="w-full pl-10 pr-10 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-brand-500 transition">
+                {% if search_query %}
+                    <a href="{{ url_for('admin_files', category=active_category, sort=current_sort, user_id=selected_user_id) }}" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-white">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+            </form>
+
+            <div class="flex items-center gap-3">
+                <!-- User Filter Dropdown -->
+                <span class="text-xs text-slate-400">Filter by User:</span>
+                <select onchange="window.location.href=this.value"
+                        class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500 cursor-pointer">
+                    <option value="{{ url_for('admin_files', category=active_category, q=search_query, sort=current_sort) }}" {{ 'selected' if not selected_user_id }}>All Users</option>
+                    {% for u in all_users %}
+                        <option value="{{ url_for('admin_files', category=active_category, q=search_query, sort=current_sort, user_id=u['id']) }}" {{ 'selected' if selected_user_id == u['id'] }}>
+                            {{ u['username'] }} ({{ u['email'] }})
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <span class="text-xs text-slate-400">Sort by:</span>
+                <select onchange="window.location.href=this.value"
+                        class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500 cursor-pointer">
+                    <option value="{{ url_for('admin_files', category=active_category, q=search_query, sort='newest', user_id=selected_user_id) }}" {{ 'selected' if current_sort == 'newest' }}>Newest First</option>
+                    <option value="{{ url_for('admin_files', category=active_category, q=search_query, sort='oldest', user_id=selected_user_id) }}" {{ 'selected' if current_sort == 'oldest' }}>Oldest First</option>
+                    <option value="{{ url_for('admin_files', category=active_category, q=search_query, sort='size_desc', user_id=selected_user_id) }}" {{ 'selected' if current_sort == 'size_desc' }}>Size (Largest)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Files Table -->
+    {% if files and files|length > 0 %}
+        <div class="glass-panel rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold border-b border-slate-800 text-[11px]">
+                        <tr>
+                            <th class="px-5 py-3">File Name</th>
+                            <th class="px-5 py-3">Owner / User</th>
+                            <th class="px-5 py-3">Category</th>
+                            <th class="px-5 py-3">Size</th>
+                            <th class="px-5 py-3">Uploaded Date</th>
+                            <th class="px-5 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for file in files %}
+                            {% set badge_info = {
+                                'image': {'bg': 'bg-pink-500/10', 'text': 'text-pink-400', 'border': 'border-pink-500/20', 'icon': 'image', 'label': 'Image'},
+                                'word': {'bg': 'bg-blue-500/10', 'text': 'text-blue-400', 'border': 'border-blue-500/20', 'icon': 'file-text', 'label': 'Word Doc'},
+                                'powerpoint': {'bg': 'bg-orange-500/10', 'text': 'text-orange-400', 'border': 'border-orange-500/20', 'icon': 'presentation', 'label': 'PowerPoint'},
+                                'spreadsheet': {'bg': 'bg-emerald-500/10', 'text': 'text-emerald-400', 'border': 'border-emerald-500/20', 'icon': 'sheet', 'label': 'Excel'},
+                                'pdf': {'bg': 'bg-rose-500/10', 'text': 'text-rose-400', 'border': 'border-rose-500/20', 'icon': 'file-text', 'label': 'PDF'},
+                                'text': {'bg': 'bg-amber-500/10', 'text': 'text-amber-400', 'border': 'border-amber-500/20', 'icon': 'code', 'label': 'Code/Text'},
+                                'media': {'bg': 'bg-purple-500/10', 'text': 'text-purple-400', 'border': 'border-purple-500/20', 'icon': 'film', 'label': 'Media'},
+                                'archive': {'bg': 'bg-cyan-500/10', 'text': 'text-cyan-400', 'border': 'border-cyan-500/20', 'icon': 'archive', 'label': 'Archive'},
+                                'other': {'bg': 'bg-slate-800', 'text': 'text-slate-400', 'border': 'border-slate-700', 'icon': 'file', 'label': 'File'}
+                            } %}
+                            {% set badge = badge_info.get(file['category'], badge_info['other']) %}
+                            <tr class="hover:bg-slate-800/30 transition">
+                                <td class="px-5 py-3.5 font-medium text-white flex items-center gap-2 max-w-sm truncate">
+                                    <i data-lucide="{{ badge['icon'] }}" class="w-4 h-4 {{ badge['text'] }} flex-shrink-0"></i>
+                                    <span class="truncate" title="{{ file['filename'] }}">{{ file['filename'] }}</span>
+                                </td>
+                                <td class="px-5 py-3.5">
+                                    <span class="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-medium text-[11px] border border-slate-700">
+                                        {{ file['username'] }}
+                                    </span>
+                                </td>
+                                <td class="px-5 py-3.5">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-semibold {{ badge['bg'] }} {{ badge['text'] }} border {{ badge['border'] }}">
+                                        {{ badge['label'] }}
+                                    </span>
+                                </td>
+                                <td class="px-5 py-3.5 font-mono">{{ file['file_size']|format_bytes }}</td>
+                                <td class="px-5 py-3.5 text-slate-400">{{ file['created_at'][:16] }}</td>
+                                <td class="px-5 py-3.5 text-right">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button onclick="openPreview('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}', '{{ file['category'] }}', '{{ file['file_ext'] }}', '{{ file['file_size']|format_bytes }}')"
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Preview">
+                                            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                        <a href="{{ url_for('download_file', file_id=file['id']) }}"
+                                           class="p-1.5 rounded-lg text-brand-400 hover:text-white hover:bg-brand-600 transition" title="Download">
+                                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                        </a>
+                                        <button onclick="openDeleteModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}', true)"
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition" title="Admin Delete">
+                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="glass-panel p-12 rounded-3xl border border-slate-800 text-center max-w-lg mx-auto">
+            <div class="w-16 h-16 rounded-3xl bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="inbox" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-white">No Stored Files Found</h3>
+            <p class="text-xs text-slate-400 mt-1">No files match your query or category in the system.</p>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+

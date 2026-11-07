@@ -1,0 +1,724 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Control Center - CloudVault{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Admin Header Banner -->
+    <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xl shadow-lg shadow-amber-500/10">
+                <i data-lucide="shield-check" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+                    Administrator Control Center
+                </h1>
+                <p class="text-xs text-slate-400 mt-0.5">Approve new users, manage security privileges, and inspect storage telemetry.</p>
+                <div class="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-900 border border-slate-700 text-[11px] text-slate-300">
+                    <span class="flex items-center gap-1 text-emerald-400 font-medium">
+                        <i data-lucide="bell" class="w-3 h-3"></i> Real-Time Alerts:
+                    </span>
+                    <span>Admin Phone: <code class="text-white font-mono">{{ session.get('admin_phone', '+919876543210') }}</code></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="{{ url_for('admin_files') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white flex items-center gap-1.5 shadow-md shadow-brand-500/20 transition">
+                <i data-lucide="folder-search" class="w-4 h-4"></i> Browse All User Files
+            </a>
+            <a href="{{ url_for('dashboard') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition">
+                <i data-lucide="user" class="w-4 h-4"></i> My Personal Vault
+            </a>
+        </div>
+    </div>
+
+    <!-- Telemetry Metric Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- Pending Approvals Card -->
+        <div class="glass-card p-5 rounded-2xl border {{ 'border-amber-500/40 bg-amber-500/5' if stats['pending_users'] > 0 else 'border-slate-800' }}">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <span class="font-medium">Pending Approvals</span>
+                <span class="p-1.5 rounded-lg bg-amber-500/10 text-amber-400"><i data-lucide="clock" class="w-4 h-4"></i></span>
+            </div>
+            <div class="text-3xl font-extrabold {{ 'text-amber-400' if stats['pending_users'] > 0 else 'text-white' }}">
+                {{ stats['pending_users'] }}
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Users waiting for activation</p>
+        </div>
+
+        <!-- Total Users Card -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <span class="font-medium">Total Registered Users</span>
+                <span class="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i data-lucide="users" class="w-4 h-4"></i></span>
+            </div>
+            <div class="text-3xl font-extrabold text-white">
+                {{ stats['total_users'] }}
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Non-admin user accounts</p>
+        </div>
+
+        <!-- Total Files Stored Card -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <span class="font-medium">Files in Vaults</span>
+                <span class="p-1.5 rounded-lg bg-brand-500/10 text-brand-400"><i data-lucide="files" class="w-4 h-4"></i></span>
+            </div>
+            <div class="text-3xl font-extrabold text-white">
+                {{ stats['total_files'] }}
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Across all user directories</p>
+        </div>
+
+        <!-- Total Storage Consumed Card -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <span class="font-medium">Storage Consumed</span>
+                <span class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i data-lucide="hard-drive" class="w-4 h-4"></i></span>
+            </div>
+            <div class="text-3xl font-extrabold text-white">
+                {{ stats['total_storage']|format_bytes }}
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Disk storage utilization</p>
+        </div>
+
+    </div>
+
+    <!-- Admin Tabs Navigation -->
+    <div class="flex items-center gap-2 border-b border-slate-800 pb-3">
+        <a href="{{ url_for('admin_dashboard', tab='approvals') }}"
+           class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition
+                  {{ 'bg-amber-500/20 text-amber-300 border border-amber-500/30' if active_tab == 'approvals' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
+            <i data-lucide="user-check" class="w-4 h-4"></i>
+            User Approvals Queue
+            {% if pending_users|length > 0 %}
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-slate-950">
+                    {{ pending_users|length }}
+                </span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('admin_dashboard', tab='users') }}"
+           class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition
+                  {{ 'bg-brand-500/20 text-brand-300 border border-brand-500/30' if active_tab == 'users' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
+            <i data-lucide="users" class="w-4 h-4"></i>
+            All Registered Users ({{ users|length }})
+        </a>
+
+        <a href="{{ url_for('admin_dashboard', tab='audit') }}"
+           class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition
+                  {{ 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' if active_tab == 'audit' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
+            <i data-lucide="activity" class="w-4 h-4"></i>
+            Audit Activity Logs
+        </a>
+
+        <a href="{{ url_for('admin_dashboard', tab='settings') }}"
+           class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition
+                  {{ 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' if active_tab == 'settings' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+            Live OTP & SMS Gateway Settings
+        </a>
+    </div>
+
+    <!-- TAB 1: PENDING APPROVALS -->
+    {% if active_tab == 'approvals' %}
+        <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                        <i data-lucide="user-plus" class="w-5 h-5 text-amber-400"></i> New Registration Requests
+                    </h3>
+                    <p class="text-xs text-slate-400">Users cannot sign in or store files until approved below.</p>
+                </div>
+            </div>
+
+            {% if pending_users and pending_users|length > 0 %}
+                <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold border-b border-slate-800 text-[11px]">
+                            <tr>
+                                <th class="px-5 py-3">User & Verification</th>
+                                <th class="px-5 py-3">Email (Gmail)</th>
+                                <th class="px-5 py-3">Password</th>
+                                <th class="px-5 py-3">Phone Number</th>
+                                <th class="px-5 py-3">Registration Date</th>
+                                <th class="px-5 py-3 text-right">Approval Decision</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60">
+                            {% for u in pending_users %}
+                                <tr class="hover:bg-slate-800/30 transition">
+                                    <td class="px-5 py-4 font-semibold text-white">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center text-xs font-bold">
+                                                {{ u['username'][0]|upper }}
+                                            </div>
+                                            <div>
+                                                <div>{{ u['username'] }}</div>
+                                                <span class="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+                                                    <i data-lucide="shield-check" class="w-3 h-3"></i> OTP Verified
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-5 py-4 text-slate-300 font-mono text-[11px]">{{ u['email'] }}</td>
+                                    <td class="px-5 py-4">
+                                        <div class="flex items-center gap-1.5 font-mono text-xs">
+                                            <span id="pending-pwd-{{ u['id'] }}">••••••••</span>
+                                            <button type="button" onclick="togglePassword('pending-pwd-{{ u['id'] }}', '{{ u['plain_password']|default('User@123') }}')" class="p-1 rounded text-slate-400 hover:text-amber-400 transition" title="Show/Hide Password">
+                                                <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td class="px-5 py-4 text-emerald-300 font-mono text-[11px] flex items-center gap-1.5 mt-2">
+                                        <i data-lucide="phone" class="w-3.5 h-3.5 text-emerald-400"></i> {{ u['phone_number'] or 'N/A' }}
+                                    </td>
+                                    <td class="px-5 py-4 text-slate-400">{{ u['created_at'][:16] }}</td>
+                                    <td class="px-5 py-4 text-right">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <!-- Approve Form -->
+                                            <form method="POST" action="{{ url_for('admin_approve_user', user_id=u['id']) }}">
+                                                <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 shadow-sm transition">
+                                                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Approve
+                                                </button>
+                                            </form>
+                                            <!-- Reject Form -->
+                                            <form method="POST" action="{{ url_for('admin_reject_user', user_id=u['id']) }}">
+                                                <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 flex items-center gap-1 transition">
+                                                    <i data-lucide="x" class="w-3.5 h-3.5"></i> Reject
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="p-10 text-center rounded-2xl bg-slate-950/40 border border-slate-800">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-3">
+                        <i data-lucide="check-check" class="w-6 h-6"></i>
+                    </div>
+                    <h4 class="text-sm font-semibold text-white">All Caught Up!</h4>
+                    <p class="text-xs text-slate-400 mt-1">There are no pending user registration requests. All signed-up users are approved.</p>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <!-- TAB 2: ALL REGISTERED USERS -->
+    {% if active_tab == 'users' %}
+        <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                        <i data-lucide="users" class="w-5 h-5 text-brand-400"></i> User Accounts & Vault Directory Allocation
+                    </h3>
+                    <p class="text-xs text-slate-400">Inspect storage usage and manage user account privileges.</p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold border-b border-slate-800 text-[11px]">
+                        <tr>
+                            <th class="px-5 py-3">User (Email Name)</th>
+                            <th class="px-5 py-3">Password</th>
+                            <th class="px-5 py-3">Role</th>
+                            <th class="px-5 py-3">Status</th>
+                            <th class="px-5 py-3">Files Stored</th>
+                            <th class="px-5 py-3">Storage Consumed</th>
+                            <th class="px-5 py-3">Registered</th>
+                            <th class="px-5 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for u in users %}
+                            <tr class="hover:bg-slate-800/30 transition">
+                                <td class="px-5 py-3.5">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-white">
+                                            {{ u['username'][0]|upper }}
+                                        </div>
+                                        <div>
+                                            <div class="font-semibold text-white">{{ u['username'] }}</div>
+                                            <div class="text-[11px] text-slate-400 font-mono">{{ u['email'] }}</div>
+                                            {% if u['phone_number'] %}
+                                                <div class="text-[10px] text-emerald-400 font-mono flex items-center gap-1 mt-0.5">
+                                                    <i data-lucide="phone" class="w-3 h-3"></i> {{ u['phone_number'] }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <!-- Admin Viewable Plain Password -->
+                                <td class="px-5 py-3.5 font-mono text-xs">
+                                    <div class="flex items-center gap-1.5">
+                                        <span id="user-pwd-{{ u['id'] }}">••••••••</span>
+                                        <button type="button" onclick="togglePassword('user-pwd-{{ u['id'] }}', '{{ u['plain_password']|default('User@123') }}')" class="p-1 rounded text-slate-400 hover:text-brand-400 transition" title="Show/Hide Password">
+                                            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-3.5">
+                                    {% if u['role'] == 'admin' %}
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/25">
+                                            ADMIN
+                                        </span>
+                                    {% else %}
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                                            USER
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-5 py-3.5">
+                                    {% if u['status'] == 'approved' %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                            APPROVED
+                                        </span>
+                                    {% elif u['status'] == 'pending' %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                            PENDING
+                                        </span>
+                                    {% elif u['status'] == 'suspended' %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                            SUSPENDED
+                                        </span>
+                                    {% else %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                            {{ u['status']|upper }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <!-- Files Stored by this user -->
+                                <td class="px-5 py-3.5">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-white text-sm">{{ u['total_files'] }}</span>
+                                        {% if u['total_files'] > 0 %}
+                                            <script type="application/json" id="user-files-data-{{ u['id'] }}">{{ u['files']|tojson|safe }}</script>
+                                            <button type="button" onclick="openUserFilesModalFromScript('{{ u['username'] }}', 'user-files-data-{{ u['id'] }}')"
+                                                    class="px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-500/20 text-brand-300 hover:bg-brand-500 hover:text-white border border-brand-500/30 flex items-center gap-1 transition">
+                                                <i data-lucide="folder-search" class="w-3 h-3"></i> View Files
+                                            </button>
+                                        {% else %}
+                                            <span class="text-[10px] text-slate-500 italic">No files yet</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <!-- Storage Consumed by this user -->
+                                <td class="px-5 py-3.5">
+                                    <div class="space-y-1">
+                                        <div class="font-mono text-xs text-white">{{ u['used_storage']|format_bytes }} <span class="text-[10px] text-slate-400">/ 1 GB</span></div>
+                                        {% set pct = ((u['used_storage'] / 1073741824) * 100)|round(1) %}
+                                        <div class="w-24 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                            <div class="bg-gradient-to-r from-brand-500 to-indigo-500 h-full rounded-full" style="width: {{ [pct, 100]|min }}%"></div>
+                                        </div>
+                                        <div class="text-[9px] text-slate-400 font-mono">{{ pct }}% used</div>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-3.5 text-slate-400">{{ u['created_at'][:10] }}</td>
+                                <td class="px-5 py-3.5 text-right">
+                                    {% if u['role'] != 'admin' %}
+                                        <div class="flex items-center justify-end gap-2">
+                                            <!-- Toggle Suspend / Activate Form -->
+                                            <form method="POST" action="{{ url_for('admin_toggle_user_status', user_id=u['id']) }}">
+                                                <button type="submit" title="{{ 'Suspend User' if u['status'] == 'approved' else 'Activate User' }}"
+                                                        class="px-2.5 py-1 rounded-lg text-xs font-semibold {{ 'bg-amber-500/10 text-amber-300 hover:bg-amber-500 hover:text-slate-950' if u['status'] == 'approved' else 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500 hover:text-white' }} transition">
+                                                    {{ 'Suspend' if u['status'] == 'approved' else 'Activate' }}
+                                                </button>
+                                            </form>
+
+                                            <!-- Delete User Form -->
+                                            <form method="POST" action="{{ url_for('admin_delete_user', user_id=u['id']) }}" onsubmit="return confirm('Permanently delete {{ u['username'] }} and ALL their uploaded files?')">
+                                                <button type="submit" title="Delete User and Files"
+                                                        class="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-[11px] text-slate-500 italic">Root Admin</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- TAB 3: AUDIT LOGS -->
+    {% if active_tab == 'audit' %}
+        <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+            <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                <i data-lucide="activity" class="w-5 h-5 text-indigo-400"></i> Recent Security & Storage Audit Trail
+            </h3>
+            <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold border-b border-slate-800 text-[11px]">
+                        <tr>
+                            <th class="px-5 py-3">Timestamp</th>
+                            <th class="px-5 py-3">User</th>
+                            <th class="px-5 py-3">Action</th>
+                            <th class="px-5 py-3">Details</th>
+                            <th class="px-5 py-3">IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 font-mono text-[11px]">
+                        {% for log in logs %}
+                            <tr class="hover:bg-slate-800/30 transition">
+                                <td class="px-5 py-3 text-slate-400">{{ log['created_at'] }}</td>
+                                <td class="px-5 py-3 text-white font-sans font-semibold">{{ log['username'] or 'System' }}</td>
+                                <td class="px-5 py-3">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-brand-300">
+                                        {{ log['action'] }}
+                                    </span>
+                                </td>
+                                <td class="px-5 py-3 text-slate-300 font-sans">{{ log['details'] }}</td>
+                                <td class="px-5 py-3 text-slate-500">{{ log['ip_address'] or '127.0.0.1' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- TAB 4: LIVE OTP & GATEWAY SETTINGS -->
+    {% if active_tab == 'settings' %}
+        <div class="space-y-6">
+            
+            <!-- Information Banner -->
+            <div class="glass-panel p-6 rounded-3xl border border-emerald-500/30 bg-emerald-500/5 shadow-xl">
+                <div class="flex items-start gap-3">
+                    <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex-shrink-0">
+                        <i data-lucide="radio" class="w-6 h-6 animate-pulse"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-semibold text-white">Live Real-Time Communication Hub</h3>
+                        <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+                            Configure your authentic <strong>Gmail SMTP App Password</strong> and <strong>SMS Gateway API Keys</strong> below. Once configured, real live 6-digit OTP codes are delivered directly into your users' actual Gmail inboxes and physical mobile phones!
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <form method="POST" action="{{ url_for('admin_save_settings') }}" class="space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    <!-- CARD 1: GMAIL LIVE SMTP SETTINGS -->
+                    <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                            <div class="flex items-center gap-2">
+                                <span class="p-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20">
+                                    <i data-lucide="mail" class="w-5 h-5"></i>
+                                </span>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-white">Live Gmail (Email OTP)</h4>
+                                    <span class="text-[11px] text-slate-400">Sends real emails via Google's secure servers</span>
+                                </div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold {{ 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' if gateway_settings['GMAIL_USER'] and gateway_settings['GMAIL_APP_PASSWORD'] else 'bg-amber-500/10 text-amber-400 border border-amber-500/20' }}">
+                                {{ 'CONFIGURED' if gateway_settings['GMAIL_USER'] and gateway_settings['GMAIL_APP_PASSWORD'] else 'NOT CONFIGURED' }}
+                            </span>
+                        </div>
+
+                        <!-- Guide notice -->
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-300 space-y-1">
+                            <span class="font-bold text-white block">How to get a free Google App Password:</span>
+                            <ol class="list-decimal pl-4 space-y-0.5 text-slate-400">
+                                <li>Open <a href="https://myaccount.google.com/apppasswords" target="_blank" class="text-brand-400 underline font-medium">Google App Passwords</a> (2-Step Verification must be on).</li>
+                                <li>Type App Name: <code class="text-white">CloudVault</code> and click <strong>Create</strong>.</li>
+                                <li>Copy the 16-character code and paste below!</li>
+                            </ol>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Your Sender Gmail Address</label>
+                            <input type="email" name="gmail_user" value="{{ gateway_settings['GMAIL_USER'] }}"
+                                   placeholder="mycompany@gmail.com"
+                                   class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-brand-500 transition">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Gmail 16-Character App Password</label>
+                            <input type="password" name="gmail_app_password" value="{{ gateway_settings['GMAIL_APP_PASSWORD'] }}"
+                                   placeholder="abcd efgh ijkl mnop"
+                                   class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs font-mono focus:outline-none focus:border-brand-500 transition">
+                        </div>
+                    </div>
+
+                    <!-- CARD 2: REAL MOBILE SMS GATEWAY -->
+                    <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                            <div class="flex items-center gap-2">
+                                <span class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    <i data-lucide="message-square" class="w-5 h-5"></i>
+                                </span>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-white">Live Phone SMS Gateway</h4>
+                                    <span class="text-[11px] text-slate-400">Delivers real SMS directly to mobile SIM cards</span>
+                                </div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold {{ 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' if gateway_settings['FAST2SMS_API_KEY'] or gateway_settings['TWILIO_ACCOUNT_SID'] else 'bg-amber-500/10 text-amber-400 border border-amber-500/20' }}">
+                                {{ 'CONFIGURED' if gateway_settings['FAST2SMS_API_KEY'] or gateway_settings['TWILIO_ACCOUNT_SID'] else 'NOT CONFIGURED' }}
+                            </span>
+                        </div>
+
+                        <!-- Guide notice -->
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-300 space-y-1">
+                            <span class="font-bold text-white block">Fast2SMS (Recommended for India - Free Instant Setup):</span>
+                            <p class="text-slate-400">
+                                Sign up at <a href="https://www.fast2sms.com" target="_blank" class="text-emerald-400 underline font-medium">Fast2SMS.com</a>, go to <strong>Dev API</strong>, and copy your API Key. It delivers real SMS instantly to Indian numbers.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Fast2SMS API Key (Instant India SMS)</label>
+                            <input type="password" name="fast2sms_api_key" value="{{ gateway_settings['FAST2SMS_API_KEY'] }}"
+                                   placeholder="Paste Fast2SMS authorization key here..."
+                                   class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs font-mono focus:outline-none focus:border-brand-500 transition">
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-800/80">
+                            <span class="block text-[11px] font-semibold text-slate-400 mb-2">Or Twilio (Global SMS):</span>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" name="twilio_account_sid" value="{{ gateway_settings['TWILIO_ACCOUNT_SID'] }}" placeholder="Account SID" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-[11px]">
+                                <input type="password" name="twilio_auth_token" value="{{ gateway_settings['TWILIO_AUTH_TOKEN'] }}" placeholder="Auth Token" class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-[11px]">
+                            </div>
+                            <input type="text" name="twilio_phone_number" value="{{ gateway_settings['TWILIO_PHONE_NUMBER'] }}" placeholder="Twilio From Phone Number (e.g. +1...)" class="mt-2 w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-[11px]">
+                        </div>
+                    </div>
+
+                    <!-- CARD 3: ADMIN ALERT PHONE & EMAIL -->
+                    <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4 lg:col-span-2">
+                        <div class="flex items-center gap-2 pb-3 border-b border-slate-800">
+                            <span class="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                <i data-lucide="bell-ring" class="w-5 h-5"></i>
+                            </span>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">Administrator Real-Time Alert Settings</h4>
+                                <span class="text-[11px] text-slate-400">Where the system sends SMS and email whenever any user verifies OTP</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1">Admin Mobile Phone Number (Receives Real SMS Alert)</label>
+                                <input type="tel" name="admin_phone" value="{{ gateway_settings['ADMIN_PHONE'] or '+919876543210' }}"
+                                       placeholder="+91 98765 43210"
+                                       class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-mono focus:outline-none focus:border-brand-500 transition">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-300 mb-1">Admin Notification Email</label>
+                                <input type="email" name="admin_email" value="{{ gateway_settings['ADMIN_EMAIL'] or 'admin@vault.local' }}"
+                                       placeholder="admin@vault.local"
+                                       class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-brand-500 transition">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Save All Gateway Settings Button -->
+                <div class="flex justify-end">
+                    <button type="submit" class="px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-500/25 flex items-center gap-2 text-sm transition">
+                        <i data-lucide="save" class="w-4 h-4"></i> Save Live Gateway Credentials
+                    </button>
+                </div>
+            </form>
+
+            <!-- LIVE TESTERS (SEND REAL TEST EMAIL & REAL TEST SMS RIGHT NOW) -->
+            <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+                <h4 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> Instant Live Dispatch Testers
+                </h4>
+                <p class="text-xs text-slate-400">Send an authentic test OTP to verify that your Gmail and SMS keys are functioning properly:</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <!-- Live Email Tester -->
+                    <form method="POST" action="{{ url_for('admin_test_email') }}" class="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                        <span class="text-xs font-semibold text-white flex items-center gap-1.5">
+                            <i data-lucide="send" class="w-3.5 h-3.5 text-red-400"></i> Send Real Test Email
+                        </span>
+                        <input type="email" name="test_email" required placeholder="Enter your Gmail to receive test OTP..."
+                               class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs">
+                        <button type="submit" class="w-full py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white transition flex items-center justify-center gap-1">
+                            <i data-lucide="mail-check" class="w-3.5 h-3.5"></i> Deliver Real Test Email
+                        </button>
+                    </form>
+
+                    <!-- Live SMS Tester -->
+                    <form method="POST" action="{{ url_for('admin_test_sms') }}" class="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                        <span class="text-xs font-semibold text-white flex items-center gap-1.5">
+                            <i data-lucide="smartphone" class="w-3.5 h-3.5 text-emerald-400"></i> Send Real Test SMS
+                        </span>
+                        <input type="tel" name="test_phone" required placeholder="Enter mobile number to receive real SMS..."
+                               class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs font-mono">
+                        <button type="submit" class="w-full py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center justify-center gap-1">
+                            <i data-lucide="message-square-check" class="w-3.5 h-3.5"></i> Deliver Real Test SMS
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    {% endif %}
+
+</div>
+
+<!-- User Files Inspection Modal for Admin -->
+<div id="userFilesModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-4xl max-h-[85vh] rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center">
+                    <i data-lucide="folder" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        Files Stored by: <span id="modalUserName" class="text-brand-300 font-mono">User</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">Directly stored and managed inside MongoDB cluster GridFS.</p>
+                </div>
+            </div>
+            <button onclick="closeUserFilesModal()" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <!-- Modal Body: Files Table -->
+        <div class="p-6 overflow-y-auto space-y-4">
+            <div id="modalFilesList" class="overflow-x-auto rounded-2xl border border-slate-800">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="p-4 bg-slate-950/60 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+            <span id="modalTotalSummary">0 files stored</span>
+            <button onclick="closeUserFilesModal()" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium transition">
+                Close Inspector
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function togglePassword(elemId, plainPwd) {
+        const span = document.getElementById(elemId);
+        if (!span) return;
+        if (span.innerText === '••••••••') {
+            span.innerText = plainPwd;
+            span.classList.add('text-brand-300', 'font-bold');
+        } else {
+            span.innerText = '••••••••';
+            span.classList.remove('text-brand-300', 'font-bold');
+        }
+    }
+
+    function openUserFilesModalFromScript(username, scriptId) {
+        const el = document.getElementById(scriptId);
+        let files = [];
+        if (el && el.textContent) {
+            try {
+                files = JSON.parse(el.textContent);
+            } catch (err) {
+                console.error("JSON parse error:", err);
+            }
+        }
+        openUserFilesModal(username, files);
+    }
+
+    function openUserFilesModal(username, files) {
+        document.getElementById('modalUserName').innerText = username;
+        const container = document.getElementById('modalFilesList');
+        const summary = document.getElementById('modalTotalSummary');
+
+        if (!files || files.length === 0) {
+            container.innerHTML = `
+                <div class="p-8 text-center text-slate-400 text-xs">
+                    <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+                    No files uploaded yet by this user.
+                </div>
+            `;
+            summary.innerText = "0 files stored in MongoDB";
+        } else {
+            let totalBytes = 0;
+            let rowsHtml = '';
+
+            files.forEach(f => {
+                totalBytes += (f.file_size || 0);
+                const sizeStr = formatBytesJs(f.file_size || 0);
+                const ext = (f.file_ext || 'file').toUpperCase();
+                rowsHtml += `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="px-4 py-3 font-medium text-white flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-brand-300 border border-slate-700">${ext}</span>
+                            <span class="truncate max-w-xs" title="${f.filename}">${f.filename}</span>
+                        </td>
+                        <td class="px-4 py-3 capitalize text-slate-400">${f.category || 'other'}</td>
+                        <td class="px-4 py-3 font-mono text-slate-300">${sizeStr}</td>
+                        <td class="px-4 py-3 text-slate-400 font-mono text-[11px]">${(f.created_at || '').slice(0, 16)}</td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="flex items-center justify-end gap-1.5">
+                                <button onclick="openPreview('${f.id}', '${f.filename.replace(/'/g, "\\'")}', '${f.category}', '${f.file_ext}', '${sizeStr}')"
+                                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Preview">
+                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <a href="/download/${f.id}" class="p-1.5 rounded-lg text-brand-400 hover:text-white hover:bg-brand-600 transition" title="Download">
+                                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            container.innerHTML = `
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800 text-[10px]">
+                        <tr>
+                            <th class="px-4 py-2.5">File Name</th>
+                            <th class="px-4 py-2.5">Category</th>
+                            <th class="px-4 py-2.5">Size</th>
+                            <th class="px-4 py-2.5">Upload Date</th>
+                            <th class="px-4 py-2.5 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 font-sans">
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            `;
+            summary.innerText = `${files.length} file(s) stored (${formatBytesJs(totalBytes)}) directly in MongoDB cluster`;
+        }
+
+        document.getElementById('userFilesModal').classList.remove('hidden');
+        lucide.createIcons();
+    }
+
+    function closeUserFilesModal() {
+        document.getElementById('userFilesModal').classList.add('hidden');
+    }
+
+    function formatBytesJs(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+</script>
+{% endblock %}
+

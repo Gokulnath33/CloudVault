@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Enter Verification Code - CloudVault{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto my-10 sm:my-14">
+    <div class="glass-panel p-8 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden text-center">
+        
+        <!-- Glow accent -->
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-brand-500/20 rounded-full blur-2xl"></div>
+
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-brand-500/25">
+            <i data-lucide="shield-alert" class="w-7 h-7 text-white"></i>
+        </div>
+
+        <h2 class="text-2xl font-bold text-white tracking-tight">Enter Verification Code</h2>
+        <p class="text-xs text-slate-400 mt-1.5 max-w-sm mx-auto">
+            We have dispatched a real-time 6-digit one-time password (OTP) to:
+        </p>
+
+        <!-- Destination Target Badge -->
+        <div class="mt-3 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-xs font-mono text-brand-300">
+            {% if channel == 'email' %}
+                <i data-lucide="mail" class="w-3.5 h-3.5 text-brand-400"></i>
+            {% else %}
+                <i data-lucide="message-square" class="w-3.5 h-3.5 text-emerald-400"></i>
+            {% endif %}
+            <span>{{ target }}</span>
+        </div>
+
+        <!-- Real OTP Verification Notice -->
+        <p class="text-[11px] text-slate-400 mt-3">
+            Please check your {{ 'Gmail inbox / spam folder' if channel == 'email' else 'mobile phone text messages' }} and enter the 6-digit code below.
+        </p>
+
+        <!-- OTP Verification Form -->
+        <form method="POST" action="{{ url_for('verify_otp') }}" class="mt-6 space-y-5">
+            <input type="hidden" name="target" value="{{ target }}">
+            <input type="hidden" id="fullOtpInput" name="otp_code" required>
+
+            <!-- 6-Digit Individual Boxes -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">6-Digit Security Code</label>
+                <div class="flex items-center justify-center gap-2 sm:gap-3" id="otpBoxContainer">
+                    <input type="text" maxlength="1" inputmode="numeric" autofocus pattern="[0-9]"
+                           class="otp-digit w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold font-mono rounded-xl bg-slate-900/90 border border-slate-700 text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/50 transition">
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
+                           class="otp-digit w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold font-mono rounded-xl bg-slate-900/90 border border-slate-700 text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/50 transition">
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
+                           class="otp-digit w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold font-mono rounded-xl bg-slate-900/90 border border-slate-700 text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/50 transition">
+                    <span class="text-slate-600 font-bold">-</span>
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
+                           class="otp-digit w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold font-mono rounded-xl bg-slate-900/90 border border-slate-700 text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/50 transition">
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
+                           class="otp-digit w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold font-mono rounded-xl bg-slate-900/90 border border-slate-700 text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/50 transition">
+                    <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
+                           class="otp-digit w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold font-mono rounded-xl bg-slate-900/90 border border-slate-700 text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/50 transition">
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" id="verifyBtn" class="w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2 text-sm transition transform hover:-translate-y-0.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i> Validate OTP & Submit for Admin Approval
+            </button>
+        </form>
+
+        <!-- Resend & Alternative Channel Controls -->
+        <div class="mt-6 pt-5 border-t border-slate-800/80 text-xs text-slate-400 space-y-3">
+            <div class="flex items-center justify-between">
+                <span>Didn't receive the code?</span>
+                <form method="POST" action="{{ url_for('resend_otp') }}" id="resendForm">
+                    <input type="hidden" name="target" value="{{ target }}">
+                    <input type="hidden" name="channel" value="{{ channel }}">
+                    <button type="submit" id="resendBtn" disabled
+                            class="font-semibold text-slate-500 cursor-not-allowed flex items-center gap-1 transition">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span id="resendLabel">Resend OTP (<span id="timerText">60</span>s)</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Alternative Delivery Option -->
+            <div class="text-center pt-2">
+                <form method="POST" action="{{ url_for('resend_otp') }}" class="inline">
+                    <input type="hidden" name="target" value="{{ target }}">
+                    <input type="hidden" name="channel" value="{{ 'sms' if channel == 'email' else 'email' }}">
+                    <button type="submit" class="text-brand-400 hover:text-brand-300 font-medium underline underline-offset-2 transition">
+                        {% if channel == 'email' %}
+                            Send code to Phone via SMS instead
+                        {% else %}
+                            Send code to Gmail / Email instead
+                        {% endif %}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Digits input auto-focus and paste handling
+    const digits = document.querySelectorAll('.otp-digit');
+    const fullInput = document.getElementById('fullOtpInput');
+
+    digits.forEach((input, index) => {
+        input.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (val.length > 0) {
+                // Keep only numeric
+                e.target.value = val.replace(/[^0-9]/g, '').slice(-1);
+                if (index < digits.length - 1 && e.target.value) {
+                    digits[index + 1].focus();
+                }
+            }
+            updateFullOtp();
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                digits[index - 1].focus();
+            }
+        });
+
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pastedData = (e.clipboardData || window.clipboardData).getData('text').trim().replace(/[^0-9]/g, '');
+            if (pastedData.length >= 6) {
+                for (let i = 0; i < 6; i++) {
+                    digits[i].value = pastedData[i];
+                }
+                digits[5].focus();
+                updateFullOtp();
+            }
+        });
+    });
+
+    function updateFullOtp() {
+        let code = '';
+        digits.forEach(d => code += d.value);
+        fullInput.value = code;
+    }
+
+    // 60-Second Resend Countdown
+    let timeLeft = 60;
+    const resendBtn = document.getElementById('resendBtn');
+    const timerText = document.getElementById('timerText');
+    const resendLabel = document.getElementById('resendLabel');
+
+    const countdown = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+            clearInterval(countdown);
+            resendBtn.disabled = false;
+            resendBtn.classList.remove('text-slate-500', 'cursor-not-allowed');
+            resendBtn.classList.add('text-brand-400', 'hover:text-brand-300', 'cursor-pointer');
+            resendLabel.innerText = 'Resend OTP Now';
+        } else {
+            timerText.innerText = timeLeft;
+        }
+    }, 1000);
+</script>
+{% endblock %}
+
