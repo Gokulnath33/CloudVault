@@ -9,7 +9,7 @@ import re
 import uuid
 import mimetypes
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import (
@@ -37,6 +37,8 @@ app = Flask(__name__)
 app.json_provider_class = CustomJSONProvider
 app.json = CustomJSONProvider(app)
 app.secret_key = os.environ.get('SECRET_KEY', 'files-access-secure-token-2026-supersecret')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Configure file storage path and limits
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -46,6 +48,9 @@ app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB max per request
 
 # Ensure base uploads folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Cache DB info at startup to avoid per-request DB calls
+_cached_db_info = None
 
 # ----------------- Helper Functions & Decorators -----------------
 
@@ -66,10 +71,22 @@ app.jinja_env.filters['format_bytes'] = format_bytes
 
 @app.context_processor
 def inject_db_info():
-    """Inject active MongoDB connection details into all templates."""
+    """Inject active MongoDB connection details into all templates (cached)."""
+    global _cached_db_info
+    if _cached_db_info is None:
+        _cached_db_info = database.get_active_connection_info()
     return {
-        'db_info': database.get_active_connection_info()
+        'db_info': _cached_db_info
     }
+
+@app.after_request
+def add_cache_headers(response):
+    """Add cache headers for static assets to eliminate redundant requests."""
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    else:
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 def detect_file_category(filename):
     """
@@ -103,17 +120,32 @@ def detect_file_category(filename):
     return 'other', ext
 
 def login_required(f):
-    """Decorator ensuring a user is logged in and active."""
+    """Decorator ensuring a user is logged in and active (with cached verification for high speed)."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             flash("Please sign in to access your file vault.", "warning")
             return redirect(url_for('login', next=request.path))
-        user = database.get_user_by_id(session['user_id'])
-        if not user or user['status'] != 'approved':
+        
+        # Fast path: check cached session status to avoid repeated DB round-trips on every click
+        import time
+        now = time.time()
+        last_checked = session.get('_status_checked_at', 0)
+        
+        # Verify from database at most once every 5 minutes
+        if (now - last_checked > 300) or ('_user_status' not in session):
+            user = database.get_user_by_id(session['user_id'])
+            if not user or user['status'] != 'approved':
+                session.clear()
+                flash("Your account is not active or has been suspended.", "danger")
+                return redirect(url_for('login'))
+            session['_user_status'] = user['status']
+            session['_status_checked_at'] = now
+        elif session.get('_user_status') != 'approved':
             session.clear()
             flash("Your account is not active or has been suspended.", "danger")
             return redirect(url_for('login'))
+            
         return f(*args, **kwargs)
     return decorated_function
 
@@ -382,13 +414,16 @@ def login():
             return render_template('login.html', identifier=identifier)
 
         # Login approved! Set session
+        import time
         session.clear()
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['role'] = user['role']
+        session['_user_status'] = user['status']
+        session['_status_checked_at'] = time.time()
         session.permanent = True
 
-        database.log_action(user['id'], 'USER_LOGIN', "Successful login.", request.remote_addr)
+        database.log_action(user['id'], 'USER_LOGIN', "Successful login.", request.remote_addr, username=user['username'])
 
         next_url = request.args.get('next')
         if user['role'] == 'admin':

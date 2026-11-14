@@ -60,10 +60,16 @@ def get_client():
             except Exception:
                 pass
 
-    # If configured URI is an Atlas cloud URI, connect with robust timeout
+    # If configured URI is an Atlas cloud URI, connect with fast timeout and pooling
     if configured_uri:
         try:
-            test_client = MongoClient(configured_uri, serverSelectionTimeoutMS=4000, connectTimeoutMS=4000)
+            test_client = MongoClient(
+                configured_uri,
+                serverSelectionTimeoutMS=2000,
+                connectTimeoutMS=2000,
+                maxPoolSize=50,
+                minPoolSize=5
+            )
             test_client.admin.command('ping')
             _client = test_client
             _active_uri = configured_uri
@@ -131,13 +137,19 @@ def init_db():
 
     # 2. Indexes for files collection
     db.files.create_index([('user_id', ASCENDING)])
+    db.files.create_index([('user_id', ASCENDING), ('folder_id', ASCENDING)])
+    db.files.create_index([('folder_id', ASCENDING)])
     db.files.create_index([('category', ASCENDING)])
     db.files.create_index([('created_at', DESCENDING)])
 
-    # 3. Indexes for audit_logs collection
-    db.audit_logs.create_index([('created_at', DESCENDING)])
+    # 3. Indexes for folders collection
+    db.folders.create_index([('user_id', ASCENDING)])
 
-    # 4. Indexes for otp_verifications collection
+    # 4. Indexes for audit_logs collection
+    db.audit_logs.create_index([('created_at', DESCENDING)])
+    db.audit_logs.create_index([('user_id', ASCENDING)])
+
+    # 5. Indexes for otp_verifications collection
     db.otp_verifications.create_index([('target', ASCENDING)], unique=True)
     db.otp_verifications.create_index([('expires_at', ASCENDING)], expireAfterSeconds=0)
 
@@ -298,9 +310,28 @@ def delete_otp_record(target):
     db.otp_verifications.delete_one({'target': target.strip().lower()})
 
 def get_all_users():
-    """Retrieve all users with file and storage aggregates and plain passwords for admin view."""
+    """Retrieve all users with file and storage aggregates and plain passwords for admin view (fast single-query batch)."""
     db = get_db()
     users = list(db.users.find().sort('created_at', DESCENDING))
+    if not users:
+        return []
+
+    # Single fast query for all file summaries across all users instead of N queries
+    all_files_cursor = db.files.find(
+        {},
+        {'user_id': 1, 'filename': 1, 'file_size': 1, 'category': 1, 'file_ext': 1, 'created_at': 1}
+    ).sort('created_at', DESCENDING)
+
+    user_files_map = {}
+    user_storage_map = {}
+    for f in all_files_cursor:
+        uid = f.get('user_id')
+        if uid not in user_files_map:
+            user_files_map[uid] = []
+            user_storage_map[uid] = 0
+        user_files_map[uid].append(to_dict(f))
+        user_storage_map[uid] += f.get('file_size', 0)
+
     result = []
     for u in users:
         u_dict = to_dict(u)
@@ -310,11 +341,10 @@ def get_all_users():
         if not u_dict.get('plain_password'):
             u_dict['plain_password'] = 'Admin@123' if u_dict.get('role') == 'admin' else 'User@123'
 
-        # Fetch all files belonging to this user
-        user_files = [to_dict(f) for f in db.files.find({'user_id': uid_str}).sort('created_at', DESCENDING)]
+        user_files = user_files_map.get(uid_str, [])
         u_dict['files'] = user_files
         u_dict['total_files'] = len(user_files)
-        u_dict['used_storage'] = sum(f.get('file_size', 0) for f in user_files)
+        u_dict['used_storage'] = user_storage_map.get(uid_str, 0)
 
         result.append(u_dict)
     return result
@@ -616,12 +646,19 @@ def create_folder(user_id, folder_name, color='indigo'):
     return str(res.inserted_id)
 
 def get_user_folders(user_id):
-    """Retrieve all folders owned by a user with count of files."""
+    """Retrieve all folders owned by a user with count of files (optimized batch aggregation)."""
     db = get_db()
     cursor = db.folders.find({'user_id': str(user_id)}).sort('name', ASCENDING)
     folders = [to_dict(f) for f in cursor]
-    for f in folders:
-        f['file_count'] = db.files.count_documents({'folder_id': f['id']})
+    if folders:
+        folder_ids = [f['id'] for f in folders]
+        pipeline = [
+            {'$match': {'folder_id': {'$in': folder_ids}}},
+            {'$group': {'_id': '$folder_id', 'count': {'$sum': 1}}}
+        ]
+        counts = {str(r['_id']): r['count'] for r in db.files.aggregate(pipeline)}
+        for f in folders:
+            f['file_count'] = counts.get(f['id'], 0)
     return folders
 
 def get_folder_by_id(folder_id):
@@ -774,14 +811,13 @@ def get_system_stats():
         'categories': categories
     }
 
-def log_action(user_id, action, details='', ip_address=''):
-    """Record an action in the MongoDB audit_logs collection."""
+def log_action(user_id, action, details='', ip_address='', username=None):
+    """Record an action in the MongoDB audit_logs collection (fast, avoids user query if username provided)."""
     try:
         db = get_db()
-        username = None
-        if user_id:
+        if username is None and user_id:
             try:
-                user = db.users.find_one({'_id': ObjectId(user_id)})
+                user = db.users.find_one({'_id': ObjectId(user_id)}, {'username': 1})
                 username = user.get('username') if user else None
             except Exception:
                 pass

@@ -57,9 +57,26 @@ button:active, a:active, input[type="submit"]:active {
     transition: transform 0.04s cubic-bezier(0, 0, 0.2, 1);
 }
 
-/* GPU hardware accelerated compositing for instant modal popups */
-.glass-panel, .glass-card, [id$="Modal"] {
+/* Hardware acceleration strictly targeted for modals */
+[id$="Modal"] {
     will-change: transform, opacity;
+}
+
+/* Paint containment to prevent entire page reflows */
+.glass-card {
+    contain: layout style paint;
+}
+
+/* Speed up rendering of off-screen card items */
+#filesGrid > div:nth-child(n+13),
+#filesList tbody tr:nth-child(n+20) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 200px;
+}
+
+/* Instant smooth page transition */
+main {
+    animation: fadeIn 0.15s ease-out;
 }
 
 

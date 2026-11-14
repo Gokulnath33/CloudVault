@@ -241,7 +241,7 @@
 
     <!-- Initialize Lucide Icons -->
     <script>
-        lucide.createIcons();
+        requestAnimationFrame(() => lucide.createIcons());
 
         // Universal Preview Modal Logic
         function openPreview(fileId, filename, category, ext, size) {
@@ -424,6 +424,19 @@
                 closeRenameModal();
                 closeDeleteModal();
             }
+        });
+
+        // Auto-dismiss alert notifications after 4 seconds
+        document.querySelectorAll('[onclick="this.parentElement.remove()"]').forEach((btn, i) => {
+            setTimeout(() => {
+                const alertBox = btn.closest('.flex.items-center.justify-between');
+                if (alertBox) {
+                    alertBox.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out';
+                    alertBox.style.opacity = '0';
+                    alertBox.style.transform = 'translateY(-6px)';
+                    setTimeout(() => alertBox.remove(), 260);
+                }
+            }, 3800 + i * 400);
         });
     </script>
 

@@ -58,5 +58,16 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+    // Immediate visual feedback on login submit to eliminate click lag perception
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const btn = this.querySelector('button[type="submit"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Signing In...';
+            requestAnimationFrame(() => lucide.createIcons({ root: btn }));
+        }
+    });
+</script>
 {% endblock %}
 
