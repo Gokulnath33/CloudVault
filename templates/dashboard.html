@@ -53,155 +53,164 @@
         </div>
     </div>
 
-    <!-- Quick Create Action Toolbar -->
-    <div class="flex flex-wrap items-center justify-between gap-3 p-4 glass-panel rounded-2xl border border-slate-800 shadow-lg">
-        <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1.5">
-                <i data-lucide="plus-circle" class="w-4 h-4 text-brand-400"></i> Create:
-            </span>
-            
-            <!-- New Folder Button -->
-            <button type="button" onclick="openModal('newFolderModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition">
-                <i data-lucide="folder-plus" class="w-3.5 h-3.5 text-indigo-400"></i> New Folder
-            </button>
+    <!-- ==================== WINDOWS FILE EXPLORER WORKSPACE ==================== -->
+    <div class="rounded-3xl border border-slate-800 bg-slate-900/95 shadow-2xl overflow-hidden glass-panel">
 
-            <!-- New Word Doc Button -->
-            <button type="button" onclick="openModal('newWordModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1.5 transition">
-                <i data-lucide="file-text" class="w-3.5 h-3.5 text-blue-400"></i> Word Doc (.docx)
-            </button>
+        <!-- 1. WINDOWS 11 EXPLORER TAB STRIP -->
+        <div class="flex items-center justify-between px-3 pt-2.5 bg-slate-950/80 border-b border-slate-800 overflow-x-auto scrollbar-none select-none">
+            <div id="explorerTabStrip" class="flex items-center gap-1.5 min-w-0">
+                <!-- Tab: My Vault (Root) -->
+                <a href="{{ url_for('dashboard') }}" 
+                   class="explorer-tab flex items-center gap-2 px-4 py-2 text-xs font-semibold {{ 'active shadow-sm' if not current_folder else '' }}">
+                    <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-brand-400"></i>
+                    <span class="truncate max-w-[130px]">My Vault (Root)</span>
+                </a>
 
-            <!-- New Excel Sheet Button -->
-            <button type="button" onclick="openModal('newExcelModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 transition">
-                <i data-lucide="sheet" class="w-3.5 h-3.5 text-emerald-400"></i> Excel (.xlsx)
-            </button>
+                <!-- Open Folder Tabs -->
+                {% for fld in folders %}
+                    {% set is_this_folder = (current_folder and current_folder['id'] == fld['id']) %}
+                    <div class="explorer-tab group flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold {{ 'active shadow-sm' if is_this_folder else '' }}">
+                        <a href="{{ url_for('dashboard', folder_id=fld['id']) }}" class="flex items-center gap-1.5 truncate max-w-[150px]" title="{{ fld['name'] }}">
+                            <i data-lucide="{{ 'folder-open' if is_this_folder else 'folder' }}" class="w-3.5 h-3.5 text-indigo-400"></i>
+                            <span class="truncate">{{ fld['name'] }}</span>
+                            <span class="text-[10px] font-mono text-slate-400 px-1 rounded bg-slate-800/80">{{ fld['file_count'] }}</span>
+                        </a>
+                        {% if is_this_folder %}
+                            <a href="{{ url_for('dashboard') }}" class="p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition ml-1" title="Close folder tab (Return to Root Vault)">
+                                <i data-lucide="x" class="w-3 h-3"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endfor %}
 
-            <!-- New PowerPoint Button -->
-            <button type="button" onclick="openModal('newPptModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/30 flex items-center gap-1.5 transition">
-                <i data-lucide="presentation" class="w-3.5 h-3.5 text-orange-400"></i> PowerPoint (.pptx)
-            </button>
-
-            <!-- New Text Note Button -->
-            <button type="button" onclick="openModal('newTextModal')" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition">
-                <i data-lucide="code" class="w-3.5 h-3.5 text-amber-400"></i> Note / Text (.txt)
-            </button>
-        </div>
-
-        <div class="flex items-center gap-2">
-            <button type="button" onclick="document.getElementById('fileInput').click()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white shadow-md shadow-brand-500/20 flex items-center gap-1.5 transition">
-                <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload Files
-            </button>
-        </div>
-    </div>
-
-    <!-- Folders Directory Explorer Section -->
-    {% if folders and folders|length > 0 or current_folder %}
-    <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                <i data-lucide="folder" class="w-4 h-4 text-indigo-400"></i>
-                <a href="{{ url_for('dashboard') }}" class="hover:text-brand-400 transition">My Vault (Root)</a>
-                {% if current_folder %}
-                    <span class="text-slate-600">/</span>
-                    <span class="text-brand-300 font-bold flex items-center gap-1">
-                        <i data-lucide="folder-open" class="w-3.5 h-3.5 text-brand-400"></i> {{ current_folder['name'] }}
-                    </span>
-                {% endif %}
+                <!-- New Tab (+) Action Button -->
+                <button type="button" onclick="openModal('newFolderModal')" 
+                        class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 border border-dashed border-slate-700/80 hover:border-slate-500 transition flex items-center gap-1 text-xs" 
+                        title="New Folder / New Explorer Tab">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                </button>
             </div>
-            {% if current_folder %}
-                <a href="{{ url_for('dashboard') }}" class="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition">
-                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Root Vault
-                </a>
-            {% endif %}
+
+            <!-- Windows Explorer Header Pill -->
+            <div class="hidden md:flex items-center gap-2 pr-3 text-xs text-slate-500 font-medium">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Windows File Explorer Mode</span>
+            </div>
         </div>
 
-        <!-- Folders Grid -->
-        {% if not current_folder and folders %}
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-1">
-            {% for fld in folders %}
-            <div class="group relative p-3 rounded-xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 transition flex flex-col justify-between">
-                <a href="{{ url_for('dashboard', folder_id=fld['id']) }}" class="space-y-2 block">
-                    <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition">
-                        <i data-lucide="folder" class="w-5 h-5"></i>
-                    </div>
-                    <div>
-                        <div class="text-xs font-semibold text-white truncate" title="{{ fld['name'] }}">{{ fld['name'] }}</div>
-                        <div class="text-[10px] text-slate-400 font-mono">{{ fld['file_count'] }} file(s)</div>
-                    </div>
-                </a>
-                <form method="POST" action="{{ url_for('delete_folder_route', folder_id=fld['id']) }}" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition" onsubmit="return confirm('Delete folder {{ fld['name'] }}? Files will remain in your vault.')">
-                    <button type="submit" class="p-1 text-slate-500 hover:text-rose-400">
-                        <i data-lucide="trash-2" class="w-3 h-3"></i>
+        <!-- 2. WINDOWS EXPLORER NAVIGATION & BREADCRUMB ADDRESS BAR -->
+        <div class="p-3 bg-slate-900/90 border-b border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-2 w-full md:w-auto">
+                <!-- Navigation Control Buttons -->
+                <div class="flex items-center gap-1 text-slate-400">
+                    <button type="button" onclick="window.history.back()" class="p-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition" title="Back">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
                     </button>
-                </form>
+                    <button type="button" onclick="window.history.forward()" class="p-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition" title="Forward">
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                    <a href="{{ url_for('dashboard') }}" class="p-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition" title="Up to Root Vault">
+                        <i data-lucide="arrow-up" class="w-4 h-4"></i>
+                    </a>
+                    <button type="button" onclick="window.location.reload()" class="p-1.5 rounded-lg hover:bg-slate-800 hover:text-white transition" title="Refresh">
+                        <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Breadcrumb Address Bar -->
+                <div class="flex-grow explorer-address-bar rounded-xl px-3.5 py-1.5 flex items-center gap-1.5 text-xs text-slate-300 min-w-[220px]">
+                    <span class="text-slate-500 flex items-center gap-1"><i data-lucide="monitor" class="w-3.5 h-3.5"></i> This PC</span>
+                    <span class="text-slate-600">›</span>
+                    <a href="{{ url_for('dashboard') }}" class="hover:text-brand-400 text-slate-300 font-medium transition flex items-center gap-1">
+                        <i data-lucide="cloud" class="w-3.5 h-3.5 text-brand-400"></i> CloudVault
+                    </a>
+                    {% if current_folder %}
+                        <span class="text-slate-600">›</span>
+                        <span class="text-white font-bold flex items-center gap-1">
+                            <i data-lucide="folder-open" class="w-3.5 h-3.5 text-indigo-400"></i> {{ current_folder['name'] }}
+                        </span>
+                    {% endif %}
+                </div>
             </div>
-            {% endfor %}
+
+            <!-- Integrated Search Bar -->
+            <form method="GET" action="{{ url_for('dashboard') }}" class="w-full md:w-80 relative">
+                {% if current_folder_id %}
+                    <input type="hidden" name="folder_id" value="{{ current_folder_id }}">
+                {% endif %}
+                <input type="hidden" name="category" value="{{ active_category }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                </span>
+                <input type="text" name="q" value="{{ search_query }}" 
+                       placeholder="Search in {{ current_folder['name'] if current_folder else 'My Vault' }}..."
+                       class="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-brand-500 transition">
+                {% if search_query %}
+                    <a href="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, sort=current_sort) }}" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-white">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+            </form>
         </div>
-        {% endif %}
-    </div>
-    {% endif %}
 
-    <!-- Drag & Drop Upload Zone -->
-    <div class="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl">
-        <form id="uploadForm" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
-            <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-brand-500 rounded-2xl p-8 text-center transition-all bg-slate-950/40 hover:bg-slate-950/80 cursor-pointer group">
-                <input type="file" id="fileInput" name="files" multiple class="hidden">
-                
-                <div class="max-w-md mx-auto space-y-3">
-                    <div class="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto group-hover:scale-110 group-hover:bg-brand-500/20 transition-all">
-                        <i data-lucide="upload-cloud" class="w-7 h-7"></i>
-                    </div>
+        <!-- 3. WINDOWS EXPLORER COMMAND TOOLBAR / RIBBON -->
+        <div class="px-4 py-2.5 bg-slate-950/60 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- New Folder Button -->
+                <button type="button" onclick="openModal('newFolderModal')" class="px-3 py-1.5 rounded-xl font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 shadow-sm transition">
+                    <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i> New Folder
+                </button>
 
-                    <div>
-                        <span class="text-sm font-semibold text-white group-hover:text-brand-300 transition">
-                            Click to browse or drag and drop files here
-                        </span>
-                        <p class="text-xs text-slate-400 mt-1">
-                            Upload single or multiple files simultaneously (Up to 500 MB per batch)
-                        </p>
-                    </div>
+                <!-- New Document Options -->
+                <button type="button" onclick="openModal('newWordModal')" class="px-3 py-1.5 rounded-xl font-medium bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1.5 transition">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-blue-400"></i> Word
+                </button>
+                <button type="button" onclick="openModal('newExcelModal')" class="px-3 py-1.5 rounded-xl font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 transition">
+                    <i data-lucide="sheet" class="w-3.5 h-3.5 text-emerald-400"></i> Excel
+                </button>
+                <button type="button" onclick="openModal('newPptModal')" class="px-3 py-1.5 rounded-xl font-medium bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/30 flex items-center gap-1.5 transition">
+                    <i data-lucide="presentation" class="w-3.5 h-3.5 text-orange-400"></i> PowerPoint
+                </button>
+                <button type="button" onclick="openModal('newTextModal')" class="px-3 py-1.5 rounded-xl font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition">
+                    <i data-lucide="code" class="w-3.5 h-3.5 text-amber-400"></i> Note
+                </button>
 
-                    <!-- File Type Pills -->
-                    <div class="flex flex-wrap items-center justify-center gap-2 pt-2 text-[11px]">
-                        <span class="px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-300 border border-pink-500/20 flex items-center gap-1">
-                            <i data-lucide="image" class="w-3 h-3"></i> Images (PNG, JPG, SVG, etc.)
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20 flex items-center gap-1">
-                            <i data-lucide="file-text" class="w-3 h-3"></i> Word (.docx, .doc)
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-300 border border-orange-500/20 flex items-center gap-1">
-                            <i data-lucide="presentation" class="w-3 h-3"></i> PowerPoint (.pptx, .ppt)
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center gap-1">
-                            <i data-lucide="sheet" class="w-3 h-3"></i> Excel & PDFs
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                            + More Types
-                        </span>
-                    </div>
-                </div>
+                <div class="h-4 w-[1px] bg-slate-700/60 mx-1 hidden sm:block"></div>
+
+                <!-- Upload Files Button -->
+                <button type="button" onclick="document.getElementById('fileInput').click()" class="px-3.5 py-1.5 rounded-xl font-semibold bg-brand-600 hover:bg-brand-500 text-white flex items-center gap-1.5 shadow-md shadow-brand-500/20 transition">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload Files
+                </button>
             </div>
 
-            <!-- Upload Progress Bar (hidden by default) -->
-            <div id="uploadProgressContainer" class="hidden mt-4 p-4 rounded-xl bg-slate-900 border border-slate-800">
-                <div class="flex items-center justify-between text-xs mb-1.5">
-                    <span id="uploadStatusText" class="font-medium text-brand-300 flex items-center gap-2">
-                        <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-brand-400"></i> Uploading files...
-                    </span>
-                    <span id="uploadPercentText" class="font-mono text-white font-semibold">0%</span>
+            <!-- View & Sort Controls -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-slate-400 text-[11px] hidden sm:inline">Sort:</span>
+                    <select onchange="window.location.href=this.value" class="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-brand-500 cursor-pointer">
+                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='newest') }}" {{ 'selected' if current_sort == 'newest' }}>Newest First</option>
+                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='oldest') }}" {{ 'selected' if current_sort == 'oldest' }}>Oldest First</option>
+                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='name_asc') }}" {{ 'selected' if current_sort == 'name_asc' }}>Name (A - Z)</option>
+                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='name_desc') }}" {{ 'selected' if current_sort == 'name_desc' }}>Name (Z - A)</option>
+                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='size_desc') }}" {{ 'selected' if current_sort == 'size_desc' }}>Size (Largest)</option>
+                    </select>
                 </div>
-                <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div id="uploadProgressBar" class="h-full bg-brand-500 rounded-full transition-all duration-200" style="width: 0%"></div>
+
+                <!-- Grid vs List View Toggle -->
+                <div class="flex items-center p-0.5 rounded-xl bg-slate-950 border border-slate-800">
+                    <button type="button" id="gridViewBtn" onclick="switchView('grid')" title="Large Icons View" class="p-1.5 rounded-lg text-white bg-slate-800 transition">
+                        <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button type="button" id="listViewBtn" onclick="switchView('list')" title="Details List View" class="p-1.5 rounded-lg text-slate-400 hover:text-white transition">
+                        <i data-lucide="list" class="w-3.5 h-3.5"></i>
+                    </button>
                 </div>
             </div>
-        </form>
-    </div>
+        </div>
 
-    <!-- Category Filter Bar, Search & Toolbar -->
-    <div class="space-y-4">
-        
-        <!-- Category Filter Pills -->
-        <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+        <!-- 4. CATEGORY FILTER PILLS -->
+        <div class="px-4 py-2 bg-slate-950/30 border-b border-slate-800/80 flex items-center gap-2 overflow-x-auto scrollbar-thin">
             {% set categories = [
                 ('all', 'All Files', 'layers', 'text-slate-300'),
                 ('image', 'Images', 'image', 'text-pink-400'),
@@ -217,68 +226,113 @@
 
             {% for cat_key, cat_name, cat_icon, cat_color in categories %}
                 {% set is_active = (active_category == cat_key) %}
-                <a href="{{ url_for('dashboard', category=cat_key, q=search_query, sort=current_sort) }}"
-                   class="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all
-                          {{ 'bg-brand-600 text-white shadow-md shadow-brand-500/25' if is_active else 'bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800' }}">
-                    <i data-lucide="{{ cat_icon }}" class="w-3.5 h-3.5 {{ 'text-white' if is_active else cat_color }}"></i>
+                <a href="{{ url_for('dashboard', folder_id=current_folder_id, category=cat_key, q=search_query, sort=current_sort) }}"
+                   class="px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all
+                          {{ 'bg-brand-600 text-white shadow-sm' if is_active else 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800/60' }}">
+                    <i data-lucide="{{ cat_icon }}" class="w-3 h-3 {{ 'text-white' if is_active else cat_color }}"></i>
                     {{ cat_name }}
                 </a>
             {% endfor %}
         </div>
 
-        <!-- Search Bar, Sorting & View Toggle -->
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
-            
-            <!-- Search Input -->
-            <form method="GET" action="{{ url_for('dashboard') }}" class="w-full sm:w-80 relative">
-                <input type="hidden" name="category" value="{{ active_category }}">
-                <input type="hidden" name="sort" value="{{ current_sort }}">
-                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
-                    <i data-lucide="search" class="w-4 h-4"></i>
-                </span>
-                <input type="text" name="q" value="{{ search_query }}" placeholder="Search files by name..."
-                       class="w-full pl-10 pr-10 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-brand-500 transition">
-                {% if search_query %}
-                    <a href="{{ url_for('dashboard', category=active_category, sort=current_sort) }}" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-white">
-                        <i data-lucide="x" class="w-4 h-4"></i>
+        <!-- 5. MAIN EXPLORER WORKSPACE BODY -->
+        <div class="p-5 space-y-6 min-h-[420px]">
+
+            <!-- Active Folder Info Banner (when inside a folder tab) -->
+            {% if current_folder %}
+            <div class="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                        <i data-lucide="folder-open" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-bold text-white flex items-center gap-2">
+                            <span>{{ current_folder['name'] }}</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                {{ files|length }} file(s)
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">Current active folder tab in File Explorer</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="{{ url_for('dashboard') }}" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition">
+                        <i data-lucide="corner-up-left" class="w-3.5 h-3.5"></i> Back to Root Vault
                     </a>
-                {% endif %}
-            </form>
-
-            <!-- Sorting & View Switcher -->
-            <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                
-                <!-- Sort Dropdown -->
-                <div class="relative flex items-center text-xs">
-                    <span class="text-slate-400 mr-2 hidden sm:inline">Sort by:</span>
-                    <select onchange="window.location.href=this.value"
-                            class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-brand-500 cursor-pointer">
-                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='newest') }}" {{ 'selected' if current_sort == 'newest' }}>Newest First</option>
-                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='oldest') }}" {{ 'selected' if current_sort == 'oldest' }}>Oldest First</option>
-                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='name_asc') }}" {{ 'selected' if current_sort == 'name_asc' }}>Name (A - Z)</option>
-                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='name_desc') }}" {{ 'selected' if current_sort == 'name_desc' }}>Name (Z - A)</option>
-                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='size_desc') }}" {{ 'selected' if current_sort == 'size_desc' }}>Size (Largest)</option>
-                        <option value="{{ url_for('dashboard', category=active_category, q=search_query, sort='size_asc') }}" {{ 'selected' if current_sort == 'size_asc' }}>Size (Smallest)</option>
-                    </select>
                 </div>
-
-                <!-- View Switcher (Grid vs List) -->
-                <div class="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800">
-                    <button type="button" id="gridViewBtn" onclick="switchView('grid')" title="Grid View"
-                            class="p-1.5 rounded-lg text-white bg-slate-800 transition">
-                        <i data-lucide="layout-grid" class="w-4 h-4"></i>
-                    </button>
-                    <button type="button" id="listViewBtn" onclick="switchView('list')" title="List View"
-                            class="p-1.5 rounded-lg text-slate-400 hover:text-white transition">
-                        <i data-lucide="list" class="w-4 h-4"></i>
-                    </button>
-                </div>
-
             </div>
+            {% endif %}
 
-        </div>
+            <!-- Folders Section (Shown in Root Vault) -->
+            {% if not current_folder and folders and folders|length > 0 %}
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i data-lucide="folder" class="w-4 h-4 text-indigo-400"></i> Folders (Click to open tab)
+                    </h3>
+                    <span class="text-[11px] text-slate-500 font-mono">{{ folders|length }} folder(s)</span>
+                </div>
 
-    </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    {% for fld in folders %}
+                    <div class="group relative p-3.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-indigo-500/50 transition-all flex flex-col justify-between cursor-pointer">
+                        <a href="{{ url_for('dashboard', folder_id=fld['id']) }}" class="space-y-2.5 block">
+                            <div class="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-105 transition">
+                                <i data-lucide="folder" class="w-7 h-7"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-bold text-white truncate" title="{{ fld['name'] }}">{{ fld['name'] }}</div>
+                                <div class="text-[10px] text-slate-400 font-mono mt-0.5">{{ fld['file_count'] }} file(s)</div>
+                            </div>
+                        </a>
+                        <form method="POST" action="{{ url_for('delete_folder_route', folder_id=fld['id']) }}" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition" onsubmit="return confirm('Delete folder {{ fld['name'] }}? Files will remain in your vault.')">
+                            <button type="submit" class="p-1 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800" title="Delete Folder">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Drag & Drop Upload Zone (Windows Explorer Drop Area) -->
+            <div>
+                <form id="uploadForm" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                    <div id="dropZone" class="border-2 border-dashed border-slate-700/80 hover:border-brand-500 rounded-2xl p-6 text-center transition-all bg-slate-950/40 hover:bg-slate-950/70 cursor-pointer group">
+                        <input type="file" id="fileInput" name="files" multiple class="hidden">
+                        
+                        <div class="max-w-md mx-auto space-y-2">
+                            <div class="w-11 h-11 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto group-hover:scale-110 transition-all">
+                                <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                            </div>
+
+                            <div>
+                                <span class="text-xs font-bold text-white group-hover:text-brand-300 transition">
+                                    Click or drop files here to upload into: <span class="text-brand-400 underline">{{ current_folder['name'] if current_folder else 'My Vault (Root)' }}</span>
+                                </span>
+                                <p class="text-[11px] text-slate-400 mt-0.5">
+                                    Supports all file types (Images, Word, Excel, PowerPoint, PDFs, Code, Media)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Progress Bar (hidden by default) -->
+                    <div id="uploadProgressContainer" class="hidden mt-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                        <div class="flex items-center justify-between text-xs mb-1.5">
+                            <span id="uploadStatusText" class="font-medium text-brand-300 flex items-center gap-2">
+                                <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-brand-400"></i> Uploading files...
+                            </span>
+                            <span id="uploadPercentText" class="font-mono text-white font-semibold">0%</span>
+                        </div>
+                        <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                            <div id="uploadProgressBar" class="h-full bg-brand-500 rounded-full transition-all duration-200" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
 
     <!-- Files Container -->
     {% if files and files|length > 0 %}
@@ -456,27 +510,40 @@
 
     {% else %}
         
-        <!-- Empty State -->
-        <div class="glass-panel p-12 rounded-3xl border border-slate-800 text-center max-w-lg mx-auto">
+        <!-- Empty State (Inside Explorer Body) -->
+        <div class="glass-panel p-12 rounded-3xl border border-slate-800 text-center max-w-lg mx-auto my-6">
             <div class="w-16 h-16 rounded-3xl bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto mb-4">
-                <i data-lucide="folder-open" class="w-8 h-8"></i>
+                <i data-lucide="{{ 'folder-open' if current_folder else 'inbox' }}" class="w-8 h-8 text-indigo-400"></i>
             </div>
-            <h3 class="text-lg font-semibold text-white">No Files Found</h3>
-            <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            <h3 class="text-lg font-semibold text-white">
+                {% if current_folder %}
+                    "{{ current_folder['name'] }}" is Empty
+                {% elif search_query or active_category != 'all' %}
+                    No Matching Files
+                {% else %}
+                    No Files Found
+                {% endif %}
+            </h3>
+            <p class="text-xs text-slate-400 mt-1.5 max-w-sm mx-auto leading-relaxed">
                 {% if search_query or active_category != 'all' %}
                     No files matched your filter query "<span class="text-white">{{ search_query or active_category }}</span>".
+                {% elif current_folder %}
+                    This folder has no files yet. Drag and drop files above or click <span class="text-white font-semibold">Upload Files</span> to store files directly inside this folder.
                 {% else %}
-                    Your vault is currently empty. Drag and drop files above to start storing your files securely.
+                    Your vault is currently empty. Drag and drop files above or create a new document to start storing your files securely.
                 {% endif %}
             </p>
             {% if search_query or active_category != 'all' %}
-                <a href="{{ url_for('dashboard') }}" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-white hover:bg-slate-700 transition">
+                <a href="{{ url_for('dashboard', folder_id=current_folder_id) }}" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-white hover:bg-slate-700 transition">
                     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Reset Filters
                 </a>
             {% endif %}
         </div>
 
     {% endif %}
+
+        </div> <!-- End of 5. MAIN EXPLORER WORKSPACE BODY -->
+    </div> <!-- End of WINDOWS FILE EXPLORER WORKSPACE -->
 
     <!-- MODAL 1: Create New Folder -->
     <div id="newFolderModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">

@@ -605,17 +605,17 @@ def upload_file():
 @app.route('/folders/create', methods=['POST'])
 @login_required
 def create_folder():
-    """Create a new folder in user's vault."""
+    """Create a new folder in user's vault and immediately open into its tab view."""
     name = request.form.get('folder_name', '').strip()
     color = request.form.get('folder_color', 'indigo')
     if not name:
         flash("Folder name cannot be empty.", "warning")
         return redirect(request.referrer or url_for('dashboard'))
 
-    database.create_folder(session['user_id'], name, color=color)
-    database.log_action(session['user_id'], 'FOLDER_CREATE', f"Created folder '{name}'", request.remote_addr)
-    flash(f"Folder '{name}' created successfully!", "success")
-    return redirect(request.referrer or url_for('dashboard'))
+    folder_id = database.create_folder(session['user_id'], name, color=color)
+    database.log_action(session['user_id'], 'FOLDER_CREATE', f"Created folder '{name}'", request.remote_addr, username=session.get('username'))
+    flash(f"Folder '{name}' created successfully! Opened in File Explorer tab.", "success")
+    return redirect(url_for('dashboard', folder_id=folder_id))
 
 @app.route('/folders/delete/<folder_id>', methods=['POST'])
 @login_required

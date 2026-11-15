@@ -14,8 +14,8 @@ def test_full_otp_and_vault_flow():
     database.init_db()
     db = database.get_db()
     
-    # Clean test data
-    db.users.delete_many({'username': {'$ne': 'admin'}})
+    # Clean test data (keep admin user)
+    db.users.delete_many({'role': {'$ne': 'admin'}})
     db.files.delete_many({})
     db.audit_logs.delete_many({})
     db.otp_verifications.delete_many({})
