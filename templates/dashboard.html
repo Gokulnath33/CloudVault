@@ -61,14 +61,14 @@
             <div id="explorerTabStrip" class="flex items-center gap-1.5 min-w-0">
                 <!-- Tab: My Vault (Root) -->
                 <a href="{{ url_for('dashboard') }}" 
-                   class="explorer-tab flex items-center gap-2 px-4 py-2 text-xs font-semibold {{ 'active shadow-sm' if not current_folder else '' }}">
+                   class="explorer-tab flex items-center gap-2 px-4 py-2 text-xs font-semibold {{ 'active shadow-sm' if (current_view == 'personal' and not current_folder) else '' }}">
                     <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-brand-400"></i>
                     <span class="truncate max-w-[130px]">My Vault (Root)</span>
                 </a>
 
                 <!-- Open Folder Tabs -->
                 {% for fld in folders %}
-                    {% set is_this_folder = (current_folder and current_folder['id'] == fld['id']) %}
+                    {% set is_this_folder = (current_view == 'personal' and current_folder and current_folder['id'] == fld['id']) %}
                     <div class="explorer-tab group flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold {{ 'active shadow-sm' if is_this_folder else '' }}">
                         <a href="{{ url_for('dashboard', folder_id=fld['id']) }}" class="flex items-center gap-1.5 truncate max-w-[150px]" title="{{ fld['name'] }}">
                             <i data-lucide="{{ 'folder-open' if is_this_folder else 'folder' }}" class="w-3.5 h-3.5 text-indigo-400"></i>
@@ -83,6 +83,24 @@
                     </div>
                 {% endfor %}
 
+                <!-- Tab: Common Disk (Public Drive) -->
+                <a href="{{ url_for('dashboard', view='common') }}" 
+                   class="explorer-tab flex items-center gap-2 px-4 py-2 text-xs font-semibold {{ 'active shadow-sm' if current_view == 'common' else '' }}"
+                   title="Common Disk: Universal shared storage accessible to all members">
+                    <i data-lucide="globe" class="w-3.5 h-3.5 text-cyan-400"></i>
+                    <span class="truncate max-w-[130px]">Common Disk</span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">{{ common_stats['file_count'] }}</span>
+                </a>
+
+                <!-- Tab: Shared with Me -->
+                <a href="{{ url_for('dashboard', view='shared') }}" 
+                   class="explorer-tab flex items-center gap-2 px-4 py-2 text-xs font-semibold {{ 'active shadow-sm' if current_view == 'shared' else '' }}"
+                   title="Files shared directly with your Gmail ID">
+                    <i data-lucide="users" class="w-3.5 h-3.5 text-purple-400"></i>
+                    <span class="truncate max-w-[130px]">Shared with Me</span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">{{ shared_count }}</span>
+                </a>
+
                 <!-- New Tab (+) Action Button -->
                 <button type="button" onclick="openModal('newFolderModal')" 
                         class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 border border-dashed border-slate-700/80 hover:border-slate-500 transition flex items-center gap-1 text-xs" 
@@ -93,8 +111,8 @@
 
             <!-- Windows Explorer Header Pill -->
             <div class="hidden md:flex items-center gap-2 pr-3 text-xs text-slate-500 font-medium">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>Windows File Explorer Mode</span>
+                <span class="w-2.5 h-2.5 rounded-full {{ 'bg-cyan-400' if current_view == 'common' else ('bg-purple-400' if current_view == 'shared' else 'bg-emerald-400') }} animate-pulse"></span>
+                <span>{{ 'Common Disk Drive' if current_view == 'common' else ('Shared Drive Mode' if current_view == 'shared' else 'File Explorer Mode') }}</span>
             </div>
         </div>
 
@@ -124,10 +142,27 @@
                     <a href="{{ url_for('dashboard') }}" class="hover:text-brand-400 text-slate-300 font-medium transition flex items-center gap-1">
                         <i data-lucide="cloud" class="w-3.5 h-3.5 text-brand-400"></i> CloudVault
                     </a>
-                    {% if current_folder %}
+                    {% if current_view == 'common' %}
+                        <span class="text-slate-600">›</span>
+                        <span class="text-cyan-300 font-bold flex items-center gap-1">
+                            <i data-lucide="globe" class="w-3.5 h-3.5 text-cyan-400"></i> Common Disk (Public Drive)
+                        </span>
+                    {% elif current_view == 'shared' %}
+                        <span class="text-slate-600">›</span>
+                        <span class="text-purple-300 font-bold flex items-center gap-1">
+                            <i data-lucide="users" class="w-3.5 h-3.5 text-purple-400"></i> Shared with Me
+                        </span>
+                    {% elif current_folder %}
+                        <span class="text-slate-600">›</span>
+                        <a href="{{ url_for('dashboard') }}" class="text-slate-400 hover:text-white">My Vault</a>
                         <span class="text-slate-600">›</span>
                         <span class="text-white font-bold flex items-center gap-1">
                             <i data-lucide="folder-open" class="w-3.5 h-3.5 text-indigo-400"></i> {{ current_folder['name'] }}
+                        </span>
+                    {% else %}
+                        <span class="text-slate-600">›</span>
+                        <span class="text-white font-bold flex items-center gap-1">
+                            <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-brand-400"></i> My Vault (Root)
                         </span>
                     {% endif %}
                 </div>
@@ -135,6 +170,9 @@
 
             <!-- Integrated Search Bar -->
             <form method="GET" action="{{ url_for('dashboard') }}" class="w-full md:w-80 relative">
+                {% if current_view != 'personal' %}
+                    <input type="hidden" name="view" value="{{ current_view }}">
+                {% endif %}
                 {% if current_folder_id %}
                     <input type="hidden" name="folder_id" value="{{ current_folder_id }}">
                 {% endif %}
@@ -144,10 +182,10 @@
                     <i data-lucide="search" class="w-4 h-4"></i>
                 </span>
                 <input type="text" name="q" value="{{ search_query }}" 
-                       placeholder="Search in {{ current_folder['name'] if current_folder else 'My Vault' }}..."
+                       placeholder="Search in {{ 'Common Disk' if current_view == 'common' else ('Shared with Me' if current_view == 'shared' else (current_folder['name'] if current_folder else 'My Vault')) }}..."
                        class="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-brand-500 transition">
                 {% if search_query %}
-                    <a href="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, sort=current_sort) }}" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-white">
+                    <a href="{{ url_for('dashboard', view=current_view, folder_id=current_folder_id, category=active_category, sort=current_sort) }}" class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-white">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </a>
                 {% endif %}
@@ -189,11 +227,11 @@
                 <div class="flex items-center gap-1.5">
                     <span class="text-slate-400 text-[11px] hidden sm:inline">Sort:</span>
                     <select onchange="window.location.href=this.value" class="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-brand-500 cursor-pointer">
-                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='newest') }}" {{ 'selected' if current_sort == 'newest' }}>Newest First</option>
-                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='oldest') }}" {{ 'selected' if current_sort == 'oldest' }}>Oldest First</option>
-                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='name_asc') }}" {{ 'selected' if current_sort == 'name_asc' }}>Name (A - Z)</option>
-                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='name_desc') }}" {{ 'selected' if current_sort == 'name_desc' }}>Name (Z - A)</option>
-                        <option value="{{ url_for('dashboard', folder_id=current_folder_id, category=active_category, q=search_query, sort='size_desc') }}" {{ 'selected' if current_sort == 'size_desc' }}>Size (Largest)</option>
+                        <option value="{{ url_for('dashboard', view=current_view, folder_id=current_folder_id, category=active_category, q=search_query, sort='newest') }}" {{ 'selected' if current_sort == 'newest' }}>Newest First</option>
+                        <option value="{{ url_for('dashboard', view=current_view, folder_id=current_folder_id, category=active_category, q=search_query, sort='oldest') }}" {{ 'selected' if current_sort == 'oldest' }}>Oldest First</option>
+                        <option value="{{ url_for('dashboard', view=current_view, folder_id=current_folder_id, category=active_category, q=search_query, sort='name_asc') }}" {{ 'selected' if current_sort == 'name_asc' }}>Name (A - Z)</option>
+                        <option value="{{ url_for('dashboard', view=current_view, folder_id=current_folder_id, category=active_category, q=search_query, sort='name_desc') }}" {{ 'selected' if current_sort == 'name_desc' }}>Name (Z - A)</option>
+                        <option value="{{ url_for('dashboard', view=current_view, folder_id=current_folder_id, category=active_category, q=search_query, sort='size_desc') }}" {{ 'selected' if current_sort == 'size_desc' }}>Size (Largest)</option>
                     </select>
                 </div>
 
@@ -226,7 +264,7 @@
 
             {% for cat_key, cat_name, cat_icon, cat_color in categories %}
                 {% set is_active = (active_category == cat_key) %}
-                <a href="{{ url_for('dashboard', folder_id=current_folder_id, category=cat_key, q=search_query, sort=current_sort) }}"
+                <a href="{{ url_for('dashboard', view=current_view, folder_id=current_folder_id, category=cat_key, q=search_query, sort=current_sort) }}"
                    class="px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all
                           {{ 'bg-brand-600 text-white shadow-sm' if is_active else 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800/60' }}">
                     <i data-lucide="{{ cat_icon }}" class="w-3 h-3 {{ 'text-white' if is_active else cat_color }}"></i>
@@ -237,6 +275,62 @@
 
         <!-- 5. MAIN EXPLORER WORKSPACE BODY -->
         <div class="p-5 space-y-6 min-h-[420px]">
+
+            <!-- Common Disk Storage & Info Banner -->
+            {% if current_view == 'common' %}
+            <div class="p-4 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-11 h-11 rounded-2xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center border border-cyan-500/30 flex-shrink-0">
+                        <i data-lucide="globe" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-bold text-white flex items-center gap-2">
+                            <span>Common Disk (Public Storage Drive)</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                {{ common_stats['file_count'] }} item(s)
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                            Universal shared storage accessible to all CloudVault members. Any user can upload and download files in this drive.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 bg-slate-900/80 px-3.5 py-2 rounded-xl border border-slate-800 text-xs text-slate-300 flex-shrink-0">
+                    <div>
+                        <div class="text-[10px] text-slate-400 uppercase font-mono">Shared Disk Capacity</div>
+                        <div class="font-bold text-white font-mono">{{ common_stats['used_bytes']|format_bytes }} <span class="text-slate-500 font-normal">/ {{ common_stats['storage_quota']|format_bytes }}</span></div>
+                    </div>
+                    <div class="w-20 h-2 bg-slate-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-cyan-400 rounded-full" style="width: {{ common_stats['quota_percent'] }}%"></div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Shared with Me Info Banner -->
+            {% if current_view == 'shared' %}
+            <div class="p-4 rounded-2xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-11 h-11 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center border border-purple-500/30 flex-shrink-0">
+                        <i data-lucide="users" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-bold text-white flex items-center gap-2">
+                            <span>Shared with Me</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                {{ files|length }} file(s)
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Files shared directly with your Gmail ID (<strong class="text-white">{{ user['email'] }}</strong>) by colleagues and other members.
+                        </p>
+                    </div>
+                </div>
+                <div class="text-xs text-purple-300 font-mono hidden sm:block">
+                    Peer-to-Peer Cloud Sharing
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Active Folder Info Banner (when inside a folder tab) -->
             {% if current_folder %}
@@ -264,7 +358,7 @@
             {% endif %}
 
             <!-- Folders Section (Shown in Root Vault) -->
-            {% if not current_folder and folders and folders|length > 0 %}
+            {% if current_view == 'personal' and not current_folder and folders and folders|length > 0 %}
             <div class="space-y-3">
                 <div class="flex items-center justify-between">
                     <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
@@ -300,6 +394,7 @@
             <div>
                 <form id="uploadForm" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                    <input type="hidden" name="is_common_disk" value="{{ '1' if current_view == 'common' else '' }}">
                     <div id="dropZone" class="border-2 border-dashed border-slate-700/80 hover:border-brand-500 rounded-2xl p-6 text-center transition-all bg-slate-950/40 hover:bg-slate-950/70 cursor-pointer group">
                         <input type="file" id="fileInput" name="files" multiple class="hidden">
                         
@@ -310,7 +405,7 @@
 
                             <div>
                                 <span class="text-xs font-bold text-white group-hover:text-brand-300 transition">
-                                    Click or drop files here to upload into: <span class="text-brand-400 underline">{{ current_folder['name'] if current_folder else 'My Vault (Root)' }}</span>
+                                    Click or drop files here to upload into: <span class="text-brand-400 underline">{{ 'Common Disk (Public Drive)' if current_view == 'common' else ('Shared with Me' if current_view == 'shared' else (current_folder['name'] if current_folder else 'My Vault (Root)')) }}</span>
                                 </span>
                                 <p class="text-[11px] text-slate-400 mt-0.5">
                                     Supports all file types (Images, Word, Excel, PowerPoint, PDFs, Code, Media)
@@ -359,21 +454,47 @@
                     
                     <!-- Top Category & Action Menu -->
                     <div class="flex items-center justify-between mb-3">
-                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider {{ badge['bg'] }} {{ badge['text'] }} border {{ badge['border'] }} flex items-center gap-1">
-                            <i data-lucide="{{ badge['icon'] }}" class="w-3 h-3"></i> {{ badge['label'] }}
-                        </span>
+                        <div class="flex flex-wrap items-center gap-1">
+                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider {{ badge['bg'] }} {{ badge['text'] }} border {{ badge['border'] }} flex items-center gap-1">
+                                <i data-lucide="{{ badge['icon'] }}" class="w-3 h-3"></i> {{ badge['label'] }}
+                            </span>
+                            {% if file.get('is_common_disk') %}
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center gap-0.5" title="Universal Common Disk Drive">
+                                    <i data-lucide="globe" class="w-2.5 h-2.5"></i> Common
+                                </span>
+                            {% endif %}
+                            {% if file.get('shared_with') and file.get('shared_with')|length > 0 %}
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-400 border border-purple-500/30 flex items-center gap-0.5" title="Shared with {{ file['shared_with']|length }} user(s)">
+                                    <i data-lucide="users" class="w-2.5 h-2.5"></i> Shared ({{ file['shared_with']|length }})
+                                </span>
+                            {% endif %}
+                        </div>
                         
                         <div class="flex items-center gap-1">
-                            <!-- Rename Button -->
-                            <button onclick="openRenameModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')" title="Rename"
-                                    class="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition">
-                                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                            <!-- Share Button -->
+                            <button type="button" onclick="openShareModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}', {{ 'true' if file.get('is_common_disk') else 'false' }})" title="Share with User or Common Disk"
+                                    class="p-1 rounded-md text-slate-400 hover:text-brand-400 hover:bg-slate-800 transition">
+                                <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
                             </button>
-                            <!-- Delete Button -->
-                            <button onclick="openDeleteModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')" title="Delete"
-                                    class="p-1 rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                            </button>
+
+                            {% if current_view == 'shared' %}
+                                <form method="POST" action="{{ url_for('unshare_file_route', file_id=file['id']) }}" class="inline" onsubmit="return confirm('Remove file from your Shared with Me list?')">
+                                    <button type="submit" title="Remove from Shared with Me" class="p-1 rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                                        <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </form>
+                            {% elif file['user_id'] == user['id'] or session.get('role') == 'admin' %}
+                                <!-- Rename Button -->
+                                <button onclick="openRenameModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')" title="Rename"
+                                        class="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition">
+                                    <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <!-- Delete Button -->
+                                <button onclick="openDeleteModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')" title="Delete"
+                                        class="p-1 rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -424,6 +545,12 @@
                             <span class="font-mono">{{ file['file_size']|format_bytes }}</span>
                             <span>{{ file['created_at'][:10] }}</span>
                         </div>
+                        {% if current_view in ['common', 'shared'] and file.get('owner_name') %}
+                            <div class="text-[11px] text-slate-400 truncate mt-1 flex items-center gap-1 font-mono">
+                                <span class="text-slate-500">By:</span>
+                                <span class="text-slate-300 truncate" title="{{ file['owner_name'] }}">{{ file['owner_name'] }}</span>
+                            </div>
+                        {% endif %}
                     </div>
 
                     <!-- Action Buttons -->
@@ -451,6 +578,7 @@
                             <th class="px-4 py-3">File Name</th>
                             <th class="px-4 py-3">Category</th>
                             <th class="px-4 py-3">Size</th>
+                            <th class="px-4 py-3">Location / Sharing</th>
                             <th class="px-4 py-3">Uploaded On</th>
                             <th class="px-4 py-3 text-right">Actions</th>
                         </tr>
@@ -480,6 +608,26 @@
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 font-mono">{{ file['file_size']|format_bytes }}</td>
+                                <td class="px-4 py-3">
+                                    <div class="flex flex-wrap items-center gap-1 text-[10px]">
+                                        {% if file.get('is_common_disk') %}
+                                            <span class="px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 flex items-center gap-1 font-mono">
+                                                <i data-lucide="globe" class="w-3 h-3"></i> Common Disk
+                                            </span>
+                                        {% endif %}
+                                        {% if file.get('shared_with') and file.get('shared_with')|length > 0 %}
+                                            <span class="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1 font-mono">
+                                                <i data-lucide="users" class="w-3 h-3"></i> Shared ({{ file['shared_with']|length }})
+                                            </span>
+                                        {% endif %}
+                                        {% if not file.get('is_common_disk') and (not file.get('shared_with') or file.get('shared_with')|length == 0) %}
+                                            <span class="text-slate-500 font-mono">Personal Vault</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if current_view in ['common', 'shared'] and file.get('owner_name') %}
+                                        <div class="text-[10px] text-slate-400 font-mono mt-0.5">By: {{ file['owner_name'] }}</div>
+                                    {% endif %}
+                                </td>
                                 <td class="px-4 py-3 text-slate-400">{{ file['created_at'][:16] }}</td>
                                 <td class="px-4 py-3 text-right">
                                     <div class="flex items-center justify-end gap-1.5">
@@ -491,14 +639,27 @@
                                            class="p-1.5 rounded-lg text-brand-400 hover:text-white hover:bg-brand-600 transition" title="Download">
                                             <i data-lucide="download" class="w-3.5 h-3.5"></i>
                                         </a>
-                                        <button onclick="openRenameModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')"
-                                                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Rename">
-                                            <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                        <!-- Share Button -->
+                                        <button type="button" onclick="openShareModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}', {{ 'true' if file.get('is_common_disk') else 'false' }})"
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-brand-400 hover:bg-slate-800 transition" title="Share with User or Common Disk">
+                                            <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
                                         </button>
-                                        <button onclick="openDeleteModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')"
-                                                class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition" title="Delete">
-                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                        </button>
+                                        {% if current_view == 'shared' %}
+                                            <form method="POST" action="{{ url_for('unshare_file_route', file_id=file['id']) }}" class="inline" onsubmit="return confirm('Remove file from your Shared with Me list?')">
+                                                <button type="submit" title="Remove from Shared with Me" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                                                    <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
+                                                </button>
+                                            </form>
+                                        {% elif file['user_id'] == user['id'] or session.get('role') == 'admin' %}
+                                            <button onclick="openRenameModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')"
+                                                    class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Rename">
+                                                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <button onclick="openDeleteModal('{{ file['id'] }}', '{{ file['filename']|replace("'", "\\'") }}')"
+                                                    class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition" title="Delete">
+                                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
@@ -516,7 +677,11 @@
                 <i data-lucide="{{ 'folder-open' if current_folder else 'inbox' }}" class="w-8 h-8 text-indigo-400"></i>
             </div>
             <h3 class="text-lg font-semibold text-white">
-                {% if current_folder %}
+                {% if current_view == 'common' %}
+                    Common Disk is Empty
+                {% elif current_view == 'shared' %}
+                    No Shared Files Found
+                {% elif current_folder %}
                     "{{ current_folder['name'] }}" is Empty
                 {% elif search_query or active_category != 'all' %}
                     No Matching Files
@@ -527,6 +692,10 @@
             <p class="text-xs text-slate-400 mt-1.5 max-w-sm mx-auto leading-relaxed">
                 {% if search_query or active_category != 'all' %}
                     No files matched your filter query "<span class="text-white">{{ search_query or active_category }}</span>".
+                {% elif current_view == 'common' %}
+                    The Common Disk currently has no files. Drag and drop files above or click Upload to share files publicly with all users.
+                {% elif current_view == 'shared' %}
+                    No files have been shared with your Gmail ID ({{ user['email'] }}) yet. When another user enters your Gmail ID in the Share dialog, their file will appear here.
                 {% elif current_folder %}
                     This folder has no files yet. Drag and drop files above or click <span class="text-white font-semibold">Upload Files</span> to store files directly inside this folder.
                 {% else %}
@@ -602,6 +771,7 @@
             </div>
             <form method="POST" action="{{ url_for('create_word_file') }}" class="space-y-3.5">
                 <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                <input type="hidden" name="is_common_disk" value="{{ '1' if current_view == 'common' else '' }}">
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">File Name</label>
                     <input type="text" name="filename" required value="New_Document.docx" placeholder="e.g. Project_Report.docx"
@@ -649,6 +819,7 @@
             </div>
             <form method="POST" action="{{ url_for('create_excel_file') }}" class="space-y-3.5">
                 <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                <input type="hidden" name="is_common_disk" value="{{ '1' if current_view == 'common' else '' }}">
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">File Name</label>
                     <input type="text" name="filename" required value="Spreadsheet.xlsx" placeholder="e.g. Budget_2026.xlsx"
@@ -697,6 +868,7 @@
             </div>
             <form method="POST" action="{{ url_for('create_powerpoint_file') }}" class="space-y-3.5">
                 <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                <input type="hidden" name="is_common_disk" value="{{ '1' if current_view == 'common' else '' }}">
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">File Name</label>
                     <input type="text" name="filename" required value="Presentation.pptx" placeholder="e.g. Project_Pitch.pptx"
@@ -741,6 +913,7 @@
             </div>
             <form method="POST" action="{{ url_for('create_text_file') }}" class="space-y-3.5">
                 <input type="hidden" name="folder_id" value="{{ current_folder_id or '' }}">
+                <input type="hidden" name="is_common_disk" value="{{ '1' if current_view == 'common' else '' }}">
                 <div>
                     <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">File Name</label>
                     <input type="text" name="filename" required value="Note.txt" placeholder="e.g. Meeting_Notes.txt"
@@ -786,7 +959,7 @@
             <div class="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400 flex-shrink-0">
                 <span class="flex items-center gap-1.5 truncate">
                     <i data-lucide="folder" class="w-4 h-4 text-brand-400 flex-shrink-0"></i>
-                    Destination: <strong class="text-white truncate">{{ current_folder['name'] if current_folder else 'My Vault (Root)' }}</strong>
+                    Destination: <strong class="text-white truncate">{{ 'Common Disk (Public Drive)' if current_view == 'common' else ('Shared with Me' if current_view == 'shared' else (current_folder['name'] if current_folder else 'My Vault (Root)')) }}</strong>
                 </span>
                 <span id="uploadModalFileCount" class="font-mono text-[11px] text-brand-300 bg-brand-500/10 px-2 py-0.5 rounded-full border border-brand-500/20 flex-shrink-0">1 file</span>
             </div>
@@ -808,11 +981,117 @@
         </div>
     </div>
 
+    <!-- MODAL: Share File with User or Common Disk -->
+    <div id="shareModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl p-6 space-y-5">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                        <i data-lucide="share-2" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">Share File</h3>
+                        <p id="shareModalFilename" class="text-xs text-brand-400 font-mono truncate max-w-xs">filename</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('shareModal')" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Mode 1: Direct Share to Specific User via Gmail ID -->
+            <div class="space-y-3 p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                        <i data-lucide="user-plus" class="w-4 h-4 text-brand-400"></i> Direct Share via Gmail ID
+                    </h4>
+                    <span class="text-[10px] text-purple-400 font-mono">Peer-to-Peer</span>
+                </div>
+                <p class="text-xs text-slate-400 leading-relaxed">
+                    Enter the recipient's Gmail ID. The file will immediately be delivered to their CloudVault <strong class="text-white">"Shared with Me"</strong> tab, and an email notification will be sent.
+                </p>
+                <form id="directShareForm" method="POST" action="" class="space-y-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Recipient Gmail ID</label>
+                        <input type="email" name="recipient_email" required list="shareableUserList" placeholder="e.g. colleague@gmail.com"
+                               class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-brand-500">
+                        <datalist id="shareableUserList">
+                            {% for u in shareable_users %}
+                                <option value="{{ u['email'] }}">{{ u['email'] }} ({{ u['role']|capitalize }})</option>
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Optional Message / Note</label>
+                        <textarea name="note" rows="2" placeholder="e.g. Please check this document for our review..."
+                                  class="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-brand-500"></textarea>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white flex items-center gap-1.5 shadow-md shadow-brand-500/20 transition">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i> Send File to User
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Mode 2: Common Disk (Public to All Users) -->
+            <div class="space-y-3 p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/20">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+                        <i data-lucide="globe" class="w-4 h-4 text-cyan-400"></i> Common Disk (Public to All)
+                    </h4>
+                    <span id="commonDiskStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full"></span>
+                </div>
+                <p class="text-xs text-slate-400 leading-relaxed">
+                    When published to the Common Disk, this file can be accessed, viewed, and downloaded by all registered CloudVault users.
+                </p>
+                <form id="toggleCommonForm" method="POST" action="" class="flex items-center justify-between pt-1">
+                    <span class="text-xs text-slate-300 font-medium">Common Disk Storage</span>
+                    <button type="submit" id="toggleCommonBtn" class="px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
+                        <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                        <span id="toggleCommonBtnText">Publish to Common Disk</span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="flex justify-end pt-2 border-t border-slate-800">
+                <button type="button" onclick="closeModal('shareModal')" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+
+    function openShareModal(fileId, filename, isCommon) {
+        document.getElementById('shareModalFilename').innerText = filename;
+        document.getElementById('directShareForm').action = '/files/share/' + fileId;
+        document.getElementById('toggleCommonForm').action = '/files/toggle-common/' + fileId;
+        
+        const badge = document.getElementById('commonDiskStatusBadge');
+        const btn = document.getElementById('toggleCommonBtn');
+        const btnText = document.getElementById('toggleCommonBtnText');
+
+        if (isCommon) {
+            badge.innerText = 'Active on Common Disk';
+            badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+            btn.className = 'px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 flex items-center gap-1.5 transition';
+            btnText.innerText = 'Remove from Common Disk';
+        } else {
+            badge.innerText = 'Private to Owner';
+            badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
+            btn.className = 'px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition';
+            btnText.innerText = 'Publish to Common Disk';
+        }
+
+        openModal('shareModal');
+    }
+
     function openModal(id) {
         const el = document.getElementById(id);
         if (el) {
@@ -1042,6 +1321,10 @@
         const folderId = "{{ current_folder_id or '' }}";
         if (folderId) {
             formData.append('folder_id', folderId);
+        }
+        const isCommon = "{{ '1' if current_view == 'common' else '' }}";
+        if (isCommon) {
+            formData.append('is_common_disk', isCommon);
         }
 
         progressContainer.classList.remove('hidden');

@@ -141,8 +141,15 @@ def init_db():
     db.files.create_index([('folder_id', ASCENDING)])
     db.files.create_index([('category', ASCENDING)])
     db.files.create_index([('created_at', DESCENDING)])
+    db.files.create_index([('is_common_disk', ASCENDING)])
+    db.files.create_index([('shared_with', ASCENDING)])
 
-    # 3. Indexes for folders collection
+    # 3. Indexes for file_shares collection
+    db.file_shares.create_index([('recipient_id', ASCENDING)])
+    db.file_shares.create_index([('file_id', ASCENDING)])
+    db.file_shares.create_index([('owner_id', ASCENDING)])
+
+    # 4. Indexes for folders collection
     db.folders.create_index([('user_id', ASCENDING)])
 
     # 4. Indexes for audit_logs collection
@@ -492,10 +499,11 @@ def get_user_recent_logs(user_id, limit=5):
 
 # --- File Operations (Stored directly in MongoDB Cluster GridFS) ---
 
-def add_file(user_id, filename, stored_filename, file_path, file_size, file_ext, mime_type, category, file_bytes=None, folder_id=None):
+def add_file(user_id, filename, stored_filename, file_path, file_size, file_ext, mime_type, category, file_bytes=None, folder_id=None, is_common_disk=False):
     """
     Record a file in MongoDB and store its physical binary bytes directly inside
     the MongoDB cluster using GridFS (fs.files and fs.chunks).
+    Supports personal vault storage, folder organization, and public Common Disk.
     """
     db = get_db()
     gridfs_id = None
@@ -538,6 +546,9 @@ def add_file(user_id, filename, stored_filename, file_path, file_size, file_ext,
         'file_ext': file_ext.lower(),
         'mime_type': mime_type,
         'category': category.lower(),
+        'is_common_disk': bool(is_common_disk),
+        'shared_with': [],
+        'shared_with_emails': [],
         'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
     result = db.files.insert_one(file_doc)
@@ -631,6 +642,262 @@ def get_user_files(user_id, category=None, search=None, sort_by='newest', folder
 
     cursor = db.files.find(query).sort(sort_fields)
     return [to_dict(f) for f in cursor]
+
+# --- Common Disk & Direct Sharing Operations ---
+
+def get_common_disk_files(category=None, search=None, sort_by='newest'):
+    """Retrieve all files published to the Common Disk (accessible to all vault users)."""
+    db = get_db()
+    query = {'is_common_disk': True}
+
+    if category and category.lower() != 'all':
+        query['category'] = category.lower()
+
+    if search:
+        query['filename'] = {'$regex': re.escape(search.strip()), '$options': 'i'}
+
+    sort_fields = [('created_at', DESCENDING)]
+    if sort_by == 'name_asc':
+        sort_fields = [('filename', ASCENDING)]
+    elif sort_by == 'name_desc':
+        sort_fields = [('filename', DESCENDING)]
+    elif sort_by == 'size_desc':
+        sort_fields = [('file_size', DESCENDING)]
+    elif sort_by == 'size_asc':
+        sort_fields = [('file_size', ASCENDING)]
+    elif sort_by == 'oldest':
+        sort_fields = [('created_at', ASCENDING)]
+
+    cursor = db.files.find(query).sort(sort_fields)
+    files = [to_dict(f) for f in cursor]
+
+    # Batch populate owner usernames/emails
+    user_ids = list(set(f['user_id'] for f in files if f.get('user_id')))
+    if user_ids:
+        user_oids = [ObjectId(uid) for uid in user_ids if ObjectId.is_valid(uid)]
+        users_map = {str(u['_id']): (u.get('email') or u.get('username')) for u in db.users.find({'_id': {'$in': user_oids}})}
+        for f in files:
+            f['owner_name'] = users_map.get(f.get('user_id'), 'Vault Member')
+    return files
+
+def get_shared_with_me_files(user_id, category=None, search=None, sort_by='newest'):
+    """Retrieve all files explicitly shared with a specific user by other users."""
+    db = get_db()
+    uid_str = str(user_id)
+    query = {'shared_with': uid_str}
+
+    if category and category.lower() != 'all':
+        query['category'] = category.lower()
+
+    if search:
+        query['filename'] = {'$regex': re.escape(search.strip()), '$options': 'i'}
+
+    sort_fields = [('created_at', DESCENDING)]
+    if sort_by == 'name_asc':
+        sort_fields = [('filename', ASCENDING)]
+    elif sort_by == 'name_desc':
+        sort_fields = [('filename', DESCENDING)]
+    elif sort_by == 'size_desc':
+        sort_fields = [('file_size', DESCENDING)]
+    elif sort_by == 'size_asc':
+        sort_fields = [('file_size', ASCENDING)]
+    elif sort_by == 'oldest':
+        sort_fields = [('created_at', ASCENDING)]
+
+    cursor = db.files.find(query).sort(sort_fields)
+    files = [to_dict(f) for f in cursor]
+
+    # Batch populate owner usernames/emails
+    user_ids = list(set(f['user_id'] for f in files if f.get('user_id')))
+    if user_ids:
+        user_oids = [ObjectId(uid) for uid in user_ids if ObjectId.is_valid(uid)]
+        users_map = {str(u['_id']): (u.get('email') or u.get('username')) for u in db.users.find({'_id': {'$in': user_oids}})}
+        for f in files:
+            f['owner_name'] = users_map.get(f.get('user_id'), 'Vault Member')
+    return files
+
+def get_common_disk_stats():
+    """Retrieve total files and storage metrics for the Common Disk."""
+    db = get_db()
+    pipeline = [
+        {'$match': {'is_common_disk': True}},
+        {'$group': {
+            '_id': None,
+            'file_count': {'$sum': 1},
+            'used_bytes': {'$sum': '$file_size'}
+        }}
+    ]
+    res = list(db.files.aggregate(pipeline))
+    file_count = res[0]['file_count'] if res else 0
+    used_bytes = res[0]['used_bytes'] if res else 0
+    common_quota = 107374182400  # 100 GB default Common Disk Pool
+    percent = min(100, round((used_bytes / common_quota) * 100, 1)) if common_quota > 0 else 0
+    return {
+        'file_count': file_count,
+        'used_bytes': used_bytes,
+        'storage_quota': common_quota,
+        'quota_percent': percent
+    }
+
+def share_file_with_user(file_id, owner_id, recipient_identifier, note=''):
+    """
+    Share a file directly with another user by their Gmail ID / email identifier.
+    Returns (success: bool, message: str, recipient_dict: dict|None).
+    """
+    db = get_db()
+    clean_id = recipient_identifier.strip().lower()
+
+    # 1. Lookup recipient user
+    recipient = db.users.find_one({
+        '$or': [
+            {'email': {'$regex': f"^{re.escape(clean_id)}$", '$options': 'i'}},
+            {'username': {'$regex': f"^{re.escape(clean_id)}$", '$options': 'i'}}
+        ]
+    })
+
+    if not recipient:
+        return False, f"No user found with Gmail ID '{clean_id}'. Please ensure they are registered.", None
+
+    recipient_uid = str(recipient['_id'])
+    recipient_email = recipient.get('email') or recipient.get('username')
+
+    if recipient_uid == str(owner_id):
+        return False, "You cannot share a file with yourself.", None
+
+    # 2. Verify file exists
+    try:
+        oid = ObjectId(file_id) if isinstance(file_id, str) else file_id
+    except Exception:
+        return False, "Invalid file ID.", None
+
+    file_doc = db.files.find_one({'_id': oid})
+    if not file_doc:
+        return False, "File not found.", None
+
+    # Verify ownership or admin
+    owner_user = db.users.find_one({'_id': ObjectId(owner_id)}) if ObjectId.is_valid(str(owner_id)) else None
+    is_admin = (owner_user and owner_user.get('role') == 'admin')
+    if file_doc.get('user_id') != str(owner_id) and not is_admin:
+        return False, "Unauthorized: Only the file owner or admin can share this file.", None
+
+    # 3. Add to shared_with and shared_with_emails
+    db.files.update_one(
+        {'_id': oid},
+        {
+            '$addToSet': {
+                'shared_with': recipient_uid,
+                'shared_with_emails': recipient_email
+            }
+        }
+    )
+
+    # 4. Record share event in file_shares collection
+    db.file_shares.update_one(
+        {'file_id': str(file_id), 'recipient_id': recipient_uid},
+        {
+            '$set': {
+                'file_id': str(file_id),
+                'filename': file_doc.get('filename', 'Unknown'),
+                'owner_id': str(owner_id),
+                'owner_email': owner_user.get('email') if owner_user else 'Unknown',
+                'recipient_id': recipient_uid,
+                'recipient_email': recipient_email,
+                'note': note.strip(),
+                'shared_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+        },
+        upsert=True
+    )
+
+    return True, f"File '{file_doc.get('filename')}' successfully shared with {recipient_email} in CloudVault!", to_dict(recipient)
+
+def unshare_file_from_user(file_id, owner_id, recipient_id):
+    """Remove a user's share access to a file."""
+    db = get_db()
+    try:
+        oid = ObjectId(file_id) if isinstance(file_id, str) else file_id
+    except Exception:
+        return False, "Invalid file ID."
+
+    file_doc = db.files.find_one({'_id': oid})
+    if not file_doc:
+        return False, "File not found."
+
+    owner_user = db.users.find_one({'_id': ObjectId(owner_id)}) if ObjectId.is_valid(str(owner_id)) else None
+    is_admin = (owner_user and owner_user.get('role') == 'admin')
+    is_recipient = (str(owner_id) == str(recipient_id))
+
+    if file_doc.get('user_id') != str(owner_id) and not is_admin and not is_recipient:
+        return False, "Unauthorized."
+
+    rec_user = db.users.find_one({'_id': ObjectId(recipient_id)}) if ObjectId.is_valid(str(recipient_id)) else None
+    rec_email = rec_user.get('email') if rec_user else None
+
+    pull_query = {'shared_with': str(recipient_id)}
+    if rec_email:
+        pull_query['shared_with_emails'] = rec_email
+
+    db.files.update_one(
+        {'_id': oid},
+        {'$pull': pull_query}
+    )
+    db.file_shares.delete_many({'file_id': str(file_id), 'recipient_id': str(recipient_id)})
+    return True, "File share removed."
+
+def toggle_file_common_disk(file_id, user_id, is_admin=False):
+    """Publish or unpublish a file to/from the Common Disk."""
+    db = get_db()
+    try:
+        oid = ObjectId(file_id) if isinstance(file_id, str) else file_id
+    except Exception:
+        return False, "Invalid file ID.", False
+
+    file_doc = db.files.find_one({'_id': oid})
+    if not file_doc:
+        return False, "File not found.", False
+
+    if file_doc.get('user_id') != str(user_id) and not is_admin:
+        return False, "Unauthorized: Only the owner or admin can modify Common Disk status.", False
+
+    new_state = not file_doc.get('is_common_disk', False)
+    db.files.update_one(
+        {'_id': oid},
+        {'$set': {'is_common_disk': new_state}}
+    )
+    action_label = "published to" if new_state else "removed from"
+    return True, f"File '{file_doc.get('filename')}' {action_label} Common Disk.", new_state
+
+def can_user_access_file(file_record, user_id, user_role):
+    """Determine whether a user is authorized to preview or download a file."""
+    if not file_record:
+        return False
+    if user_role == 'admin':
+        return True
+    if str(file_record.get('user_id')) == str(user_id):
+        return True
+    if file_record.get('is_common_disk') is True:
+        return True
+    if str(user_id) in file_record.get('shared_with', []):
+        return True
+    return False
+
+def get_shareable_users(exclude_user_id=None):
+    """Return list of active users available to share with (Gmail ID and role)."""
+    db = get_db()
+    query = {'status': 'approved'}
+    if exclude_user_id:
+        try:
+            query['_id'] = {'$ne': ObjectId(exclude_user_id)}
+        except Exception:
+            pass
+    cursor = db.users.find(query, {'email': 1, 'username': 1, 'role': 1}).sort('email', ASCENDING)
+    return [{'id': str(u['_id']), 'email': u.get('email') or u.get('username'), 'username': u.get('username')} for u in cursor]
+
+def get_file_shares_for_file(file_id):
+    """Retrieve all share entries for a specific file."""
+    db = get_db()
+    cursor = db.file_shares.find({'file_id': str(file_id)}).sort('shared_at', DESCENDING)
+    return [to_dict(s) for s in cursor]
 
 # --- Folder Operations ---
 

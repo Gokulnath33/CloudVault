@@ -435,7 +435,7 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """Main user portal displaying personal files, folders, storage quota, and document creation."""
+    """Main user portal displaying personal files, folders, Common Disk, shared files, and storage metrics."""
     user = database.get_user_by_id(session['user_id'])
     stats = database.get_user_storage_stats(user['id'])
 
@@ -444,11 +444,25 @@ def dashboard():
     search = request.args.get('q', '')
     sort_by = request.args.get('sort', 'newest')
     folder_id = request.args.get('folder_id')
+    current_view = request.args.get('view', 'personal')  # 'personal', 'common', 'shared'
 
     folders = database.get_user_folders(user['id'])
-    current_folder = database.get_folder_by_id(folder_id) if folder_id else None
+    current_folder = database.get_folder_by_id(folder_id) if (folder_id and current_view == 'personal') else None
 
-    files = database.get_user_files(user['id'], category=category, search=search, sort_by=sort_by, folder_id=folder_id)
+    # Fetch files depending on the active view
+    if current_view == 'common':
+        files = database.get_common_disk_files(category=category, search=search, sort_by=sort_by)
+    elif current_view == 'shared':
+        files = database.get_shared_with_me_files(user['id'], category=category, search=search, sort_by=sort_by)
+    else:
+        current_view = 'personal'
+        files = database.get_user_files(user['id'], category=category, search=search, sort_by=sort_by, folder_id=folder_id)
+
+    # Common Disk metrics and counts
+    common_stats = database.get_common_disk_stats()
+    shared_files = database.get_shared_with_me_files(user['id'])
+    shared_count = len(shared_files)
+    shareable_users = database.get_shareable_users(exclude_user_id=user['id'])
 
     # Calculate quota percentage
     quota_bytes = stats['storage_quota'] or 1073741824
@@ -462,6 +476,10 @@ def dashboard():
         folders=folders,
         current_folder=current_folder,
         current_folder_id=folder_id,
+        current_view=current_view,
+        common_stats=common_stats,
+        shared_count=shared_count,
+        shareable_users=shareable_users,
         stats=stats,
         quota_percent=quota_percent,
         active_category=category,
@@ -502,6 +520,7 @@ def upload_file():
     os.makedirs(user_dir, exist_ok=True)
 
     folder_id = request.form.get('folder_id') or None
+    is_common_disk = (request.form.get('is_common_disk') in ['1', 'true', 'True'])
     current_used = stats['used_bytes']
     quota = stats['storage_quota']
 
@@ -570,18 +589,16 @@ def upload_file():
                 mime_type=mime_type,
                 category=category,
                 file_bytes=file_bytes,
-                folder_id=folder_id
+                folder_id=folder_id,
+                is_common_disk=is_common_disk
             )
 
-            database.log_action(user_id, 'FILE_UPLOAD', f"Uploaded '{raw_filename}' ({format_bytes(file_size)}) to MongoDB", request.remote_addr)
+            action_type = 'COMMON_DISK_UPLOAD' if is_common_disk else 'FILE_UPLOAD'
+            target_desc = 'Common Disk' if is_common_disk else 'MongoDB Vault'
+            database.log_action(user_id, action_type, f"Uploaded '{raw_filename}' ({format_bytes(file_size)}) to {target_desc}", request.remote_addr, username=session.get('username'))
             uploaded_count += 1
 
         except Exception as e:
-            if os.path.exists(destination_path):
-                try:
-                    os.remove(destination_path)
-                except Exception:
-                    pass
             errors.append(f"Failed to save '{raw_filename}': {str(e)}")
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -589,15 +606,17 @@ def upload_file():
             'success': uploaded_count > 0,
             'uploaded_count': uploaded_count,
             'errors': errors,
-            'message': f"Uploaded {uploaded_count} file(s) successfully to MongoDB." if uploaded_count > 0 else "Upload failed."
+            'message': f"Uploaded {uploaded_count} file(s) successfully to {'Common Disk' if is_common_disk else 'MongoDB Vault'}." if uploaded_count > 0 else "Upload failed."
         })
 
     if uploaded_count > 0:
-        flash(f"Successfully uploaded {uploaded_count} file(s) to MongoDB cluster!", "success")
+        flash(f"Successfully uploaded {uploaded_count} file(s) to {'Common Disk (Shared)' if is_common_disk else 'MongoDB vault'}!", "success")
     if errors:
         for err in errors:
             flash(err, "warning")
 
+    if is_common_disk:
+        return redirect(url_for('dashboard', view='common'))
     return redirect(url_for('dashboard', folder_id=folder_id) if folder_id else url_for('dashboard'))
 
 # ----------------- Native Folder & Office Document Creation Routes -----------------
@@ -638,6 +657,7 @@ def create_word_file():
     description = request.form.get('description', '').strip()
     content = request.form.get('content', '').strip()
     folder_id = request.form.get('folder_id') or None
+    is_common_disk = (request.form.get('is_common_disk') in ['1', 'true', 'True'])
 
     user = database.get_user_by_id(user_id)
     author = user['username'] if user else "CloudVault User"
@@ -659,11 +679,15 @@ def create_word_file():
         mime_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         category='word',
         file_bytes=file_bytes,
-        folder_id=folder_id
+        folder_id=folder_id,
+        is_common_disk=is_common_disk
     )
 
-    database.log_action(user_id, 'FILE_CREATE', f"Created Word document '{raw_name}' in MongoDB", request.remote_addr)
-    flash(f"Microsoft Word document '{raw_name}' created in your MongoDB vault!", "success")
+    action_label = "in Common Disk" if is_common_disk else "in your MongoDB vault"
+    database.log_action(user_id, 'FILE_CREATE', f"Created Word document '{raw_name}' {action_label}", request.remote_addr, username=session.get('username'))
+    flash(f"Microsoft Word document '{raw_name}' created {action_label}!", "success")
+    if is_common_disk:
+        return redirect(url_for('dashboard', view='common'))
     return redirect(url_for('dashboard', folder_id=folder_id) if folder_id else url_for('dashboard'))
 
 @app.route('/create/excel', methods=['POST'])
@@ -679,6 +703,7 @@ def create_excel_file():
     headers_raw = request.form.get('headers', '').strip()
     headers = [h.strip() for h in headers_raw.split(',') if h.strip()] if headers_raw else None
     folder_id = request.form.get('folder_id') or None
+    is_common_disk = (request.form.get('is_common_disk') in ['1', 'true', 'True'])
 
     file_bytes = document_generator.generate_excel_spreadsheet(sheet_name, title, headers)
     file_size = len(file_bytes)
@@ -698,11 +723,15 @@ def create_excel_file():
         mime_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         category='spreadsheet',
         file_bytes=file_bytes,
-        folder_id=folder_id
+        folder_id=folder_id,
+        is_common_disk=is_common_disk
     )
 
-    database.log_action(user_id, 'FILE_CREATE', f"Created Excel sheet '{raw_name}' in MongoDB", request.remote_addr)
-    flash(f"Microsoft Excel spreadsheet '{raw_name}' created in your MongoDB vault!", "success")
+    action_label = "in Common Disk" if is_common_disk else "in your MongoDB vault"
+    database.log_action(user_id, 'FILE_CREATE', f"Created Excel sheet '{raw_name}' {action_label}", request.remote_addr, username=session.get('username'))
+    flash(f"Microsoft Excel spreadsheet '{raw_name}' created {action_label}!", "success")
+    if is_common_disk:
+        return redirect(url_for('dashboard', view='common'))
     return redirect(url_for('dashboard', folder_id=folder_id) if folder_id else url_for('dashboard'))
 
 @app.route('/create/powerpoint', methods=['POST'])
@@ -717,6 +746,7 @@ def create_powerpoint_file():
     subtitle = request.form.get('subtitle', '').strip()
     bullets_raw = request.form.get('bullets', '').strip()
     folder_id = request.form.get('folder_id') or None
+    is_common_disk = (request.form.get('is_common_disk') in ['1', 'true', 'True'])
 
     slides_content = None
     if bullets_raw:
@@ -746,11 +776,15 @@ def create_powerpoint_file():
         mime_type='application/vnd.openxmlformats-officedocument.presentationml.presentation',
         category='powerpoint',
         file_bytes=file_bytes,
-        folder_id=folder_id
+        folder_id=folder_id,
+        is_common_disk=is_common_disk
     )
 
-    database.log_action(user_id, 'FILE_CREATE', f"Created PowerPoint '{raw_name}' in MongoDB", request.remote_addr)
-    flash(f"Microsoft PowerPoint presentation '{raw_name}' created in your MongoDB vault!", "success")
+    action_label = "in Common Disk" if is_common_disk else "in your MongoDB vault"
+    database.log_action(user_id, 'FILE_CREATE', f"Created PowerPoint '{raw_name}' {action_label}", request.remote_addr, username=session.get('username'))
+    flash(f"Microsoft PowerPoint presentation '{raw_name}' created {action_label}!", "success")
+    if is_common_disk:
+        return redirect(url_for('dashboard', view='common'))
     return redirect(url_for('dashboard', folder_id=folder_id) if folder_id else url_for('dashboard'))
 
 @app.route('/create/text', methods=['POST'])
@@ -764,6 +798,7 @@ def create_text_file():
     title = request.form.get('title', 'Quick Note').strip()
     content = request.form.get('content', '').strip()
     folder_id = request.form.get('folder_id') or None
+    is_common_disk = (request.form.get('is_common_disk') in ['1', 'true', 'True'])
 
     file_bytes = document_generator.generate_text_document(title, content)
     file_size = len(file_bytes)
@@ -783,12 +818,68 @@ def create_text_file():
         mime_type='text/plain',
         category='text',
         file_bytes=file_bytes,
-        folder_id=folder_id
+        folder_id=folder_id,
+        is_common_disk=is_common_disk
     )
 
-    database.log_action(user_id, 'FILE_CREATE', f"Created text file '{raw_name}' in MongoDB", request.remote_addr)
-    flash(f"Text document '{raw_name}' created in your MongoDB vault!", "success")
+    action_label = "in Common Disk" if is_common_disk else "in your MongoDB vault"
+    database.log_action(user_id, 'FILE_CREATE', f"Created text file '{raw_name}' {action_label}", request.remote_addr, username=session.get('username'))
+    flash(f"Text document '{raw_name}' created {action_label}!", "success")
+    if is_common_disk:
+        return redirect(url_for('dashboard', view='common'))
     return redirect(url_for('dashboard', folder_id=folder_id) if folder_id else url_for('dashboard'))
+
+# ----------------- File Sharing & Common Disk Routes -----------------
+
+@app.route('/files/share/<file_id>', methods=['POST'])
+@login_required
+def share_file_route(file_id):
+    """Share a file with another user by their Gmail ID."""
+    user_id = session['user_id']
+    recipient_email = request.form.get('recipient_email', '').strip()
+    note = request.form.get('note', '').strip()
+
+    if not recipient_email:
+        flash("Please enter a valid Gmail ID / email address to share with.", "warning")
+        return redirect(request.referrer or url_for('dashboard'))
+
+    file_record = database.get_file_by_id(file_id)
+    if not file_record:
+        flash("File not found in vault.", "danger")
+        return redirect(request.referrer or url_for('dashboard'))
+
+    success, message, recipient = database.share_file_with_user(file_id, user_id, recipient_email, note=note)
+    if success:
+        flash(message, "success")
+        sender_email = session.get('username') or 'Vault Member'
+        file_size_str = format_bytes(file_record.get('file_size', 0))
+        otp_service.send_file_shared_email(recipient['email'], sender_email, file_record['filename'], file_size_str, note=note)
+        database.log_action(user_id, 'FILE_SHARE', f"Shared '{file_record['filename']}' with {recipient['email']}", request.remote_addr, username=sender_email)
+    else:
+        flash(message, "warning")
+
+    return redirect(request.referrer or url_for('dashboard'))
+
+@app.route('/files/unshare/<file_id>', methods=['POST'])
+@login_required
+def unshare_file_route(file_id):
+    """Remove share access from a user (or self-remove from 'Shared with Me')."""
+    user_id = session['user_id']
+    recipient_id = request.form.get('recipient_id') or user_id
+    success, message = database.unshare_file_from_user(file_id, user_id, recipient_id)
+    flash(message, "info" if success else "warning")
+    return redirect(request.referrer or url_for('dashboard'))
+
+@app.route('/files/toggle-common/<file_id>', methods=['POST'])
+@login_required
+def toggle_common_disk_route(file_id):
+    """Publish or remove a file to/from the Common Disk."""
+    user_id = session['user_id']
+    is_admin = (session.get('role') == 'admin')
+    success, message, new_state = database.toggle_file_common_disk(file_id, user_id, is_admin=is_admin)
+    flash(message, "success" if success else "warning")
+    database.log_action(user_id, 'COMMON_DISK_TOGGLE', message, request.remote_addr, username=session.get('username'))
+    return redirect(request.referrer or url_for('dashboard'))
 
 @app.route('/download/<file_id>')
 @login_required
@@ -798,8 +889,8 @@ def download_file(file_id):
     if not file_record:
         abort(404, description="File not found in vault.")
 
-    # Access control: user must own the file OR be an administrator
-    if file_record['user_id'] != session['user_id'] and session.get('role') != 'admin':
+    # Access control: user must own the file, be admin, have Common Disk access, or be in shared_with
+    if not database.can_user_access_file(file_record, session['user_id'], session.get('role')):
         abort(403, description="Unauthorized file access.")
 
     binary_data = database.get_file_binary(file_record)
@@ -823,7 +914,7 @@ def preview_file(file_id):
     if not file_record:
         abort(404, description="File not found.")
 
-    if file_record['user_id'] != session['user_id'] and session.get('role') != 'admin':
+    if not database.can_user_access_file(file_record, session['user_id'], session.get('role')):
         abort(403, description="Unauthorized file access.")
 
     binary_data = database.get_file_binary(file_record)
@@ -844,7 +935,7 @@ def preview_text_content(file_id):
     if not file_record:
         return jsonify({'success': False, 'message': 'File not found'}), 404
 
-    if file_record['user_id'] != session['user_id'] and session.get('role') != 'admin':
+    if not database.can_user_access_file(file_record, session['user_id'], session.get('role')):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
     # Allow preview for text or code files up to 1 MB

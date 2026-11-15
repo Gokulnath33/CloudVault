@@ -176,6 +176,77 @@ def send_email_otp(to_email, otp_code, username):
             'notice': "Live Gmail credentials not yet configured. Real OTP logged to terminal."
         }
 
+def send_file_shared_email(to_email, sender_email, filename, file_size_str='', note=''):
+    """
+    Transmit notification email to recipient when a file is shared with them on CloudVault.
+    Gracefully logs and continues if live SMTP is not configured or network times out.
+    """
+    subject = f"CloudVault: {sender_email} shared '{filename}' with you"
+    plain_content = f"Hello,\n\n{sender_email} has shared a file with your Gmail ID on CloudVault:\n\nFile: {filename}\nSize: {file_size_str}\n"
+    if note:
+        plain_content += f"Message: {note}\n"
+    plain_content += "\nYou can access, preview, and download this file anytime under 'Shared with Me' in your CloudVault dashboard.\n\nCloudVault Systems"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8">
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0f172a; margin: 0; padding: 20px; }}
+        .card {{ max-width: 520px; margin: 0 auto; background: #1e293b; border-radius: 16px; border: 1px solid #334155; padding: 32px; color: #f8fafc; }}
+        .brand {{ font-size: 20px; font-weight: bold; color: #818cf8; margin-bottom: 20px; }}
+        .file-box {{ background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin: 20px 0; }}
+        .filename {{ font-size: 16px; font-weight: bold; color: #38bdf8; }}
+        .meta {{ font-size: 12px; color: #94a3b8; margin-top: 4px; }}
+        .note {{ font-size: 13px; color: #cbd5e1; font-style: italic; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #334155; }}
+        .footer {{ font-size: 11px; color: #64748b; margin-top: 24px; border-top: 1px solid #334155; padding-top: 12px; }}
+    </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="brand">☁️ CloudVault File Share</div>
+            <p style="color: #cbd5e1; font-size: 14px;"><strong>{sender_email}</strong> has shared a file with your Gmail ID on CloudVault:</p>
+            <div class="file-box">
+                <div class="filename">📄 {filename}</div>
+                <div class="meta">Size: {file_size_str}</div>
+                {f'<div class="note">Message: "{note}"</div>' if note else ''}
+            </div>
+            <p style="color: #94a3b8; font-size: 13px;">This file is now instantly available in your CloudVault account under the <strong>"Shared with Me"</strong> tab.</p>
+            <div class="footer">CloudVault Secure Cloud Storage & Collaboration System</div>
+        </div>
+    </body>
+    </html>
+    """
+
+    smtp_server = get_config('GMAIL_SMTP_SERVER', 'smtp.gmail.com')
+    smtp_port = int(get_config('GMAIL_SMTP_PORT', '587'))
+    smtp_user = get_config('GMAIL_USER') or get_config('SMTP_USER')
+    smtp_pass = get_config('GMAIL_APP_PASSWORD') or get_config('SMTP_PASSWORD')
+
+    if smtp_user and smtp_pass:
+        try:
+            clean_pass = smtp_pass.replace(' ', '')
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"CloudVault <{smtp_user}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(plain_content, "plain"))
+            msg.attach(MIMEText(html_content, "html"))
+
+            context = ssl.create_default_context()
+            with smtplib.SMTP(smtp_server, smtp_port, timeout=4) as server:
+                server.starttls(context=context)
+                server.login(smtp_user, clean_pass)
+                server.sendmail(smtp_user, to_email, msg.as_string())
+            print(f" [+] [EMAIL SENT] Share notification for '{filename}' sent to {to_email}")
+            return True
+        except Exception as e:
+            print(f" [!] [EMAIL NOTICE] Share notification not sent via live SMTP: {e}")
+            return False
+    else:
+        print(f" [*] [SHARE NOTICE] File '{filename}' shared with {to_email} by {sender_email}")
+        return True
+
 # ----------------- Real Live SMS Transmission -----------------
 
 def send_sms_otp(phone_number, otp_code):
