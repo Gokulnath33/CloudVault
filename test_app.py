@@ -23,16 +23,17 @@ def test_full_otp_and_vault_flow():
     client = app.test_client()
 
     print("\n--- 1. Testing Default Administrator Login in MongoDB ---")
-    res = client.post('/login', data={'identifier': 'admin', 'password': 'Admin@123'}, follow_redirects=True)
+    admin_user = db.users.find_one({'role': 'admin'})
+    admin_gmail = admin_user['username']
+    res = client.post('/login', data={'identifier': admin_gmail, 'password': 'Admin@123'}, follow_redirects=True)
     assert res.status_code == 200
     assert b"Administrator Control Center" in res.data
-    print(" Admin login succeeded!")
+    print(f" Admin login with Gmail ID '{admin_gmail}' succeeded!")
 
     client.get('/logout', follow_redirects=True)
 
     print("\n--- 2. Testing User Registration & Real-Time OTP Dispatch ---")
     res = client.post('/register', data={
-        'username': 'john_developer',
         'email': 'john@gmail.com',
         'phone_number': '+919123456789',
         'password': 'Password123',
@@ -66,18 +67,19 @@ def test_full_otp_and_vault_flow():
     assert res.status_code == 200
     assert b"Phone &amp; Email verified successfully" in res.data or b"verified successfully" in res.data
 
-    # Verify user exists in MongoDB with pending status
-    user_record = database.get_user_by_identifier('john_developer')
+    # Verify user exists in MongoDB with pending status using their Gmail ID
+    user_record = database.get_user_by_identifier('john@gmail.com')
     assert user_record is not None
+    assert user_record['username'] == 'john@gmail.com'
     assert user_record['status'] == 'pending'
     assert user_record['phone_number'] == '+919123456789'
     assert user_record['email_verified'] is True
     assert user_record['phone_verified'] is True
-    print(" User verified OTP and is now in pending approval queue in MongoDB!")
+    print(" User verified OTP and is now in pending approval queue in MongoDB with Gmail ID as username!")
 
     print("\n--- 5. Testing Login Block Before Admin Approval ---")
     res = client.post('/login', data={
-        'identifier': '+919123456789',  # Test login with phone number!
+        'identifier': 'john@gmail.com',  # Test login with Gmail ID!
         'password': 'Password123'
     }, follow_redirects=True)
     assert res.status_code == 200
@@ -85,7 +87,7 @@ def test_full_otp_and_vault_flow():
     print(" Blocked login for pending verified user as expected!")
 
     print("\n--- 6. Testing Admin Approving the User ---")
-    client.post('/login', data={'identifier': 'admin', 'password': 'Admin@123'}, follow_redirects=True)
+    client.post('/login', data={'identifier': admin_gmail, 'password': 'Admin@123'}, follow_redirects=True)
     res = client.post(f'/admin/approve/{user_record["id"]}', follow_redirects=True)
     assert res.status_code == 200
     
@@ -96,12 +98,12 @@ def test_full_otp_and_vault_flow():
 
     print("\n--- 7. Testing User Login with Phone Number After Approval ---")
     res = client.post('/login', data={
-        'identifier': '+919123456789',  # Login using phone number
+        'identifier': 'john@gmail.com',  # Login using Gmail ID
         'password': 'Password123'
     }, follow_redirects=True)
     assert res.status_code == 200
-    assert b"Welcome, john_developer" in res.data
-    print(" Approved user successfully signed into vault using Phone Number!")
+    assert b"Welcome, john@gmail.com" in res.data
+    print(" Approved user successfully signed into vault using Gmail ID!")
 
     print("\n--- 8. Testing Multi-Format File Uploads to Vault ---")
     test_files = [

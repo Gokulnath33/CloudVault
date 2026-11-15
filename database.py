@@ -153,16 +153,18 @@ def init_db():
     db.otp_verifications.create_index([('target', ASCENDING)], unique=True)
     db.otp_verifications.create_index([('expires_at', ASCENDING)], expireAfterSeconds=0)
 
-    # Seed default Admin account if not present
+    # Seed default Admin account if not present (username is always Gmail ID)
     admin = db.users.find_one({'role': 'admin'})
-    admin_phone = os.environ.get('ADMIN_PHONE', '+919876543210')
+    admin_phone = os.environ.get('ADMIN_PHONE', '+918124870640')
+    admin_email = os.environ.get('ADMIN_EMAIL', 'gokulnath2006mg@gmail.com').strip().lower()
     if not admin:
         admin_pass_hash = generate_password_hash('Admin@123')
         admin_doc = {
-            'username': 'admin',
-            'email': 'admin@vault.local',
+            'username': admin_email,
+            'email': admin_email,
             'phone_number': admin_phone,
             'password_hash': admin_pass_hash,
+            'plain_password': 'Admin@123',
             'role': 'admin',
             'status': 'approved',
             'storage_quota': 10737418240,  # 10 GB
@@ -171,30 +173,29 @@ def init_db():
             'approved_by': None
         }
         db.users.insert_one(admin_doc)
-        print(" [+] Root Administrator created in MongoDB: Username 'admin', Password 'Admin@123'")
+        print(f" [+] Root Administrator created in MongoDB: Username (Gmail) '{admin_email}', Password 'Admin@123'")
     else:
-        # Ensure phone_number is present on existing admin
-        if 'phone_number' not in admin:
-            db.users.update_one({'_id': admin['_id']}, {'$set': {'phone_number': admin_phone}})
+        # Migrate existing admin to use Gmail ID as username and email
+        admin_updates = {'username': admin_email, 'email': admin_email}
+        if 'phone_number' not in admin or not admin.get('phone_number'):
+            admin_updates['phone_number'] = admin_phone
+        db.users.update_one({'_id': admin['_id']}, {'$set': admin_updates})
+
+    # Automatically ensure ALL existing user accounts use their Gmail ID / email as username
+    for u in db.users.find({'role': {'$ne': 'admin'}}):
+        user_email = u.get('email', '').strip().lower()
+        if user_email and u.get('username') != user_email:
+            db.users.update_one({'_id': u['_id']}, {'$set': {'username': user_email}})
 
 # --- User Operations ---
 
 def create_user(username, email, password, phone_number='', role='user', status='pending', email_verified=False, phone_verified=False):
-    """Create a new user account document in MongoDB."""
+    """Create a new user account document in MongoDB with Gmail ID as username."""
     db = get_db()
     email_clean = email.strip().lower()
     
-    # Use email prefix as username if not specified
-    raw_name = username.strip() if username and username.strip() else email_clean.split('@')[0]
-    base_name = re.sub(r'[^a-zA-Z0-9._-]', '', raw_name) or 'user'
-    
-    # Ensure username is unique in MongoDB
-    candidate = base_name
-    counter = 1
-    while db.users.find_one({'username': {'$regex': f"^{re.escape(candidate)}$", '$options': 'i'}}):
-        candidate = f"{base_name}{counter}"
-        counter += 1
-    user_name = candidate
+    # All usernames are strictly the user's Gmail ID
+    user_name = email_clean
 
     password_hash = generate_password_hash(password)
 
@@ -412,19 +413,7 @@ def update_user_profile(user_id, username=None, email=None, phone_number=None, f
 
     update_fields = {}
 
-    # Check username collision
-    if username:
-        clean_user = username.strip().lower()
-        if clean_user != current_user.get('username', '').lower():
-            existing = db.users.find_one({
-                'username': {'$regex': f"^{re.escape(clean_user)}$", '$options': 'i'},
-                '_id': {'$ne': oid}
-            })
-            if existing:
-                return False, f"Username '@{clean_user}' is already taken by another user."
-            update_fields['username'] = clean_user
-
-    # Check email collision
+    # Check email collision and keep username in sync with Gmail ID
     if email:
         clean_email = email.strip().lower()
         if clean_email != current_user.get('email', '').lower():
@@ -435,6 +424,18 @@ def update_user_profile(user_id, username=None, email=None, phone_number=None, f
             if existing:
                 return False, f"Email '{clean_email}' is already registered with another account."
             update_fields['email'] = clean_email
+            update_fields['username'] = clean_email
+    elif username:
+        clean_user = username.strip().lower()
+        if clean_user != current_user.get('username', '').lower():
+            existing = db.users.find_one({
+                'username': {'$regex': f"^{re.escape(clean_user)}$", '$options': 'i'},
+                '_id': {'$ne': oid}
+            })
+            if existing:
+                return False, f"Gmail ID '{clean_user}' is already registered with another account."
+            update_fields['username'] = clean_user
+            update_fields['email'] = clean_user
 
     if phone_number is not None:
         clean_phone = phone_number.strip()

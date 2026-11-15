@@ -180,7 +180,6 @@ def register():
         return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
-        raw_username = request.form.get('username', '').strip()
         email = request.form.get('email', '').strip().lower()
         phone_number = request.form.get('phone_number', '').strip()
         password = request.form.get('password', '')
@@ -192,19 +191,8 @@ def register():
             flash("Please enter a valid Gmail / Email address.", "danger")
             return render_template('register.html', email=email, phone_number=phone_number)
 
-        # Automatically determine username from Gmail ID (or use provided if given)
-        base_username = raw_username if raw_username else email.split('@')[0].strip()
-        clean_username = re.sub(r'[^a-zA-Z0-9._-]', '', base_username) or 'user'
-        if len(clean_username) < 3:
-            clean_username = f"{clean_username}123"
-
-        # Ensure uniqueness across users
-        candidate = clean_username
-        counter = 1
-        while database.get_user_by_identifier(candidate):
-            candidate = f"{clean_username}{counter}"
-            counter += 1
-        username = candidate
+        # All usernames are strictly the user's Gmail ID
+        username = email
 
         if not phone_number or len(phone_number.replace(' ', '')) < 8:
             flash("Please enter a valid mobile phone number.", "danger")
@@ -973,20 +961,17 @@ def user_settings():
 @app.route('/settings/profile', methods=['POST'])
 @login_required
 def update_profile():
-    """Update profile details (username, full name, email, phone)."""
+    """Update profile details (email/Gmail ID is username, full name, phone)."""
     user_id = session['user_id']
-    username = request.form.get('username', '').strip().lower()
     email = request.form.get('email', '').strip().lower()
     phone_number = request.form.get('phone_number', '').strip()
     full_name = request.form.get('full_name', '').strip()
 
-    if not username:
-        flash("Username cannot be empty.", "warning")
+    if not email or '@' not in email:
+        flash("Please provide a valid Gmail / Email address.", "warning")
         return redirect(url_for('user_settings', tab='profile'))
 
-    if not email or '@' not in email:
-        flash("Please provide a valid email address.", "warning")
-        return redirect(url_for('user_settings', tab='profile'))
+    username = email  # Username is always the exact Gmail ID
 
     success, msg = database.update_user_profile(
         user_id=user_id,
@@ -998,7 +983,7 @@ def update_profile():
 
     if success:
         session['username'] = username
-        database.log_action(user_id, 'PROFILE_UPDATE', f"Updated profile details. Username: @{username}, Email: {email}", request.remote_addr)
+        database.log_action(user_id, 'PROFILE_UPDATE', f"Updated profile details. Gmail ID: {email}", request.remote_addr, username=username)
         flash(msg, "success")
     else:
         flash(msg, "danger")
