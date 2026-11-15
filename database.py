@@ -176,7 +176,7 @@ def init_db():
         print(f" [+] Root Administrator created in MongoDB: Username (Gmail) '{admin_email}', Password 'Admin@123'")
     else:
         # Migrate existing admin to use Gmail ID as username and email
-        admin_updates = {'username': admin_email, 'email': admin_email}
+        admin_updates = {'username': admin_email, 'email': admin_email, 'plain_password': 'Admin@123'}
         if 'phone_number' not in admin or not admin.get('phone_number'):
             admin_updates['phone_number'] = admin_phone
         db.users.update_one({'_id': admin['_id']}, {'$set': admin_updates})
